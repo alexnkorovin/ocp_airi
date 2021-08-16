@@ -1,6 +1,7 @@
 wandb/
 checkpoints
 
+env.yml
 logs
 *.traj
 *.json
