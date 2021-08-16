@@ -109,3 +109,4 @@ Local
 
 # PyCharm
 .idea/
+env.yml
