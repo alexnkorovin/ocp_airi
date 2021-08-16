@@ -25,14 +25,24 @@ from ocpmodels.trainers import ForcesTrainer
 
 import sys
 
+# predict test 10k_schnet:
+# sys.argv = [
+#     __file__,
+#     '--mode',
+#     'predict',
+#     '--config-yml',
+#     'configs/is2re/10k/schnet/schnet.yml',
+#     '--checkpoint',
+#     'checkpoints/schnet/schnet_10k.pt'
+# ]
+
+# train 10k_schnet
 sys.argv = [
     __file__,
     '--mode',
-    'predict',
+    'train',
     '--config-yml',
-    'configs/is2re/10k/schnet/schnet.yml',
-    '--checkpoint',
-    'checkpoints/schnet/schnet_10k.pt'
+    'configs/is2re/10k/schnet/schnet.yml'
 ]
 
 class Runner(submitit.helpers.Checkpointable):
