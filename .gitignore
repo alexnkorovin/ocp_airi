@@ -1,7 +1,7 @@
 wandb/
 *data*
 checkpoints
-results
+
 logs
 *.traj
 *.json
