@@ -6,6 +6,7 @@ dataset:
     target_mean: -1.525913953781128
     target_std: 2.279365062713623
   - src: ../ocp_datasets/data/is2re/all/val_ood_both/data.lmdb
+  - src: ../ocp_datasets/data/is2re/all/test_ood_both/data.lmdb
 
 logger: tensorboard
 
