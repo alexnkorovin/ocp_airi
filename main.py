@@ -128,6 +128,7 @@ class Runner(submitit.helpers.Checkpointable):
 
 
 if __name__ == "__main__":
+    time_start = time.time()
     parser = flags.get_parser()
     args, override_args = parser.parse_known_args()
     config = build_config(args, override_args)
@@ -163,3 +164,5 @@ if __name__ == "__main__":
 
     else:  # Run locally
         Runner()(config)
+
+    print(time.time() - time_start)
