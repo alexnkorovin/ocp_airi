@@ -1,7 +1,6 @@
 wandb/
 checkpoints
 
-env.yml
 logs
 *.traj
 *.json
@@ -109,4 +108,5 @@ Local
 
 # PyCharm
 .idea/
+env.yml
 env.yml
