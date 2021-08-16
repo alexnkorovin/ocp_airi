@@ -32,7 +32,7 @@ sys.argv = [
     '--config-yml',
     'configs/is2re/10k/schnet/schnet.yml',
     '--checkpoint',
-    'checkpoints/2021-08-11-21-31-28/schnet_10k.pt'
+    'checkpoints/schnet/schnet_10k.pt'
 ]
 
 class Runner(submitit.helpers.Checkpointable):
