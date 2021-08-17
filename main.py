@@ -42,7 +42,8 @@ sys.argv = [
     '--mode',
     'train',
     '--config-yml',
-    'configs/is2re/10k/schnet/schnet.yml'
+    'configs/is2re/10k/schnet/schnet.yml',
+    '--cpu'
 ]
 
 class Runner(submitit.helpers.Checkpointable):
