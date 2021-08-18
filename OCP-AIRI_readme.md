@@ -32,6 +32,9 @@ After testing is completed one should be merged to **dev** branch.</br>
    git merge dev
    git push
 ```
+Note: to push make a push to cloud repository (GitHub) via git in console or GitHubAPI (PyCharm, !not GitHubDesktop) </br>
+you need to generate token for your github account ([read here](https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token)) </br>
+
 **4.Workaround**
 In the case of erroneous commit it is possible to revert:
 ```bash
