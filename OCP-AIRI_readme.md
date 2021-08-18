@@ -40,7 +40,8 @@ In the case of erroneous commit it is possible to revert:
    git checkout <hash of commit> # switch to previous state in the case of 
 ```
 ###GUI
-Alterantively, one can use [GitHub Desktop App](https://desktop.github.com/)
+Alterantively, one can use [GitHub Desktop App](https://desktop.github.com/). </br>
+Some workflow description is also on [Habr](https://habr.com/ru/post/342116/) (rus).
 ## ocp-airi repository file dependencies:
 1. Place dataset in sibling folder ocp_dataset folder to **ocp-airi** dataset
 Folder structure should be the following:
