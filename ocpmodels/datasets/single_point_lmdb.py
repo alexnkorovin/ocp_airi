@@ -39,10 +39,26 @@ class SinglePointLmdbDataset(Dataset):
         self._keys = [
             f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
         ]
+
         self.transform = transform
 
     def __len__(self):
         return len(self._keys)
+
+    def __getstate__(self):
+        # this method is called when you are
+        # going to pickle the class, to know what to pickle
+        state = self.__dict__.copy()
+
+        # don't pickle the parameter env
+        del state['env']
+
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # retrieve the excluded env
+        self.env = self.connect_db(self.db_path)
 
     def __getitem__(self, idx):
         # Return features.
@@ -55,6 +71,7 @@ class SinglePointLmdbDataset(Dataset):
         )
 
         return data_object
+
 
     def connect_db(self, lmdb_path=None):
         env = lmdb.open(
