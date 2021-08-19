@@ -40,7 +40,7 @@ In the case of erroneous commit it is possible to revert:
 ```bash
    # look on commits (press **_q_** to exit):
    git log --pretty=format:"%H [%cd]: %an - %s" --graph --date=format:%c
-   git checkout <hash of commit> # switch to previous state in the case of 
+   git checkout <hash of commit> # switch to previous state in the case of
 ```
 ###GUI
 Alterantively, one can use [GitHub Desktop App](https://desktop.github.com/). </br>
@@ -55,7 +55,12 @@ Folder structure should be the following:
 **data** folder is obtained by unpacking **tar.gz** file downloaded by the link
 as it is noted in **DATASET.md** file:
 https://dl.fbaipublicfiles.com/opencatalystproject/data/is2res_train_val_test_lmdbs.tar.gz
-2. Create 
+
+Note in Windows it is useful to use the following command:
+```bash
+tar -xvzf /mnt/c/PATH/TO/TAR-FILE/Desktop/FILE-NAME.tar.gz -C /mnt/c/PATH/TO/DESTINATION/FOLDER
+```
+2. Create
 ```bash
  ocp-airi/checkpoints/schnet/ # or correspondent model
 ```
