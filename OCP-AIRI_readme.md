@@ -1,5 +1,6 @@
 #Getting started
 
+Some workflow description is also on [Habr](https://habr.com/ru/post/342116/) (rus).
 ### Install
 **1. installation git**
 ```bash
@@ -33,7 +34,7 @@ After testing is completed one should be merged to **dev** branch.</br>
    git push
 ```
 Note: to push make a push to cloud repository (GitHub) via git in console or GitHubAPI (PyCharm, !not GitHubDesktop) </br>
-you need to generate token for your github account ([read here](https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token)) </br>
+you need to generate token for your github account [here](https://github.com/settings/tokens/) ([read manual](https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token)) </br>
 
 **4.Workaround**
 In the case of erroneous commit it is possible to revert:
@@ -44,7 +45,7 @@ In the case of erroneous commit it is possible to revert:
 ```
 ###GUI
 Alterantively, one can use [GitHub Desktop App](https://desktop.github.com/). </br>
-Some workflow description is also on [Habr](https://habr.com/ru/post/342116/) (rus).
+
 ## ocp-airi repository file dependencies:
 1. Place dataset in sibling folder ocp_dataset folder to **ocp-airi** dataset
 Folder structure should be the following:
