@@ -22,13 +22,24 @@ After testing is completed one should be merged to **dev** branch.</br>
 ```
 **3. Finishing work**
 ```bash
+   # stage files to commit (modify)
    git add <file_name> # use * to select all files in dir
+
+   # commit
    git commit -m "comment (e.g., changed number of layers in the model X"
+      # or to append to previous commit
+   git commit --amend --no-edit
+
+   # return to dev branch
    git checkout dev
    git pull
+
+   # merge changes from test branch to dev
    git merge <task or name>
+   # push data to cloud repository
    git push
-   # merging to main !do this only on general release
+
+   # !merging to main, do this only on general release
    git checkout main
    git merge dev
    git push
