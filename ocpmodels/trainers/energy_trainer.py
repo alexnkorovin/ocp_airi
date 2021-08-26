@@ -303,6 +303,7 @@ class EnergyTrainer(BaseTrainer):
                         step=current_step,
                         split="train",
                     )
+                    self.logger.send_hist(self.model, step=current_step)
 
                 # Evaluate on val set after every `eval_every` iterations.
                 if current_step % eval_every == 0:

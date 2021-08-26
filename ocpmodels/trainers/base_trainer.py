@@ -284,6 +284,8 @@ class BaseTrainer(ABC):
 
         if self.logger is not None:
             self.logger.watch(self.model)
+            # trace_data = next(iter(self.train_loader))
+            # self.logger.writer.add_graph(self.model, trace_data)
 
         self.model = OCPDataParallel(
             self.model,
@@ -476,6 +478,7 @@ class BaseTrainer(ABC):
                 step=(epoch + 1) * len(self.train_loader),
                 split=split,
             )
+            self.logger.send_hist(self.model, step=(epoch + 1) * len(self.train_loader))
 
         return metrics
 

@@ -4,13 +4,15 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-
+import pickle
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 import wandb
 from ocpmodels.common.registry import registry
 
+from ocpmodels.datasets import SinglePointLmdbDataset, TrajectoryLmdbDataset
+trace_element = SinglePointLmdbDataset({"src": "/Users/humonen/Documents/ocp_datasets/data/is2re/all/val_ood_both/data.lmdb"})[1]
 
 class Logger:
     """Generic class to interface with various logging modules, e.g. wandb,
@@ -72,10 +74,14 @@ class TensorboardLogger(Logger):
     def __init__(self, config):
         super().__init__(config)
         self.writer = SummaryWriter(self.config["cmd"]["logs_dir"])
+        self.timestamp = self.config["cmd"]["logs_dir"].split("/")[-1]
 
     # TODO: add a model hook for watching gradients.
     def watch(self, model):
-        print("NOTE: model gradient logging to tensorboard not yet supported.")
+        pass
+        #self.writer.add_graph(model, trace_element)
+        #for m in module.children():
+            #m.register_forward_hook(self.print_shape)
         return False
 
     def log(self, update_dict, step=None, split=""):
@@ -88,3 +94,12 @@ class TensorboardLogger(Logger):
                     update_dict[key], float
                 )
                 self.writer.add_scalar(key, update_dict[key], step)
+
+    def send_hist(self, model, step=None, validation=True):
+        for name, weight in model.named_parameters():
+            #heatmaps
+            if validation and step%15==0 and False:
+                with open(f"logs/heatmaps/{self.timestamp}_{step}.pickle", "wb") as f:
+                    pickle.dump(list(model.named_parameters()), f)
+            #histograms
+            self.writer.add_histogram(name, weight, step)
