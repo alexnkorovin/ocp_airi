@@ -1,6 +1,6 @@
 wandb/
 checkpoints
-results
+/results/
 
 logs
 *.traj
