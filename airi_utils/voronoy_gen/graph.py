@@ -2,9 +2,10 @@ from functools import reduce
 from itertools import product
 
 import numpy as np
+from functions import dictionary, flatten, get_combinations
 from scipy.spatial.distance import cdist
 
-from functions import dictionary, flatten, get_combinations
+np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class SimpleGraph:

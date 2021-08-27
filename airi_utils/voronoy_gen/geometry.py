@@ -4,6 +4,8 @@ import numpy as np
 from scipy.spatial import Voronoi
 from scipy.spatial.distance import cdist
 
+np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+
 
 def calc_dist(ps1, ps2):
 
