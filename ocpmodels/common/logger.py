@@ -12,7 +12,6 @@ import wandb
 from ocpmodels.common.registry import registry
 
 from ocpmodels.datasets import SinglePointLmdbDataset, TrajectoryLmdbDataset
-trace_element = SinglePointLmdbDataset({"src": "/Users/humonen/Documents/ocp_datasets/data/is2re/all/val_ood_both/data.lmdb"})[1]
 
 class Logger:
     """Generic class to interface with various logging modules, e.g. wandb,
