@@ -7,11 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 import copy
 import os
+import sys
 import time
 from pathlib import Path
 
 import submitit
-
 from ocpmodels.common import distutils
 from ocpmodels.common.flags import flags
 from ocpmodels.common.registry import registry
@@ -22,8 +22,6 @@ from ocpmodels.common.utils import (
     setup_imports,
 )
 from ocpmodels.trainers import ForcesTrainer
-
-import sys
 
 # predict test 10k_schnet:
 # sys.argv = [
@@ -39,11 +37,13 @@ import sys
 # train 10k_schnet
 sys.argv = [
     __file__,
-    '--mode',
-    'train',
-    '--config-yml',
-    'configs/is2re/10k/schnet/schnet.yml'
+    "--mode",
+    "train",
+    "--config-yml",
+    "configs/is2re/10k/schnet/schnet.yml"
+    # ,'--cpu'
 ]
+
 
 class Runner(submitit.helpers.Checkpointable):
     def __init__(self):
