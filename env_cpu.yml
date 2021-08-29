@@ -37,4 +37,4 @@ dependencies:
 - submitit
 - wandb
 - conda-pack
-name: ocp_models_test
+name: ocp_models
