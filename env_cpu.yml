@@ -1,37 +1,37 @@
 channels:
-- pytorch
-- conda-forge
-- defaults
-- mutirri
-- rusty1s
+  - pytorch
+  - conda-forge
+  - defaults
+  - mutirri
+  - rusty1s
 dependencies:
-- ase=3.21.*
-- black
-- conda-pack
-- cpuonly
-- demjson
-- ipykernel
-- ipython
-- jupyter
-- matplotlib=3.3.*
-- nbsphinx
-- pandas
-- pandoc
-- pillow
-- pip
-- pre-commit=2.10.*
-- pymatgen=2020.12.31
-- pytest==6.2.2
-- python-lmdb
-- python=3.8.*
-- pytorch-geometric
-- pytorch=1.8.1
-- pyyaml=5.4.*
-- scipy
-- sphinx
-- sphinx_rtd_theme
-- submitit
-- tensorboard=2.4.*
-- tqdm=4.58.*
-- wandb
+  - ase=3.21.*
+  - black
+  - conda-pack
+  - cpuonly
+  - demjson
+  - ipykernel
+  - ipython
+  - jupyter
+  - matplotlib=3.3.*
+  - nbsphinx
+  - pandas
+  - pandoc
+  - pillow
+  - pip
+  - pre-commit=2.10.*
+  - pymatgen=2020.12.31
+  - pytest==6.2.2
+  - python-lmdb
+  - python=3.8.*
+  - pytorch-geometric
+  - pytorch=1.8.1
+  - pyyaml=5.4.*
+  - scipy
+  - sphinx
+  - sphinx_rtd_theme
+  - submitit
+  - tensorboard=2.4.*
+  - tqdm=4.58.*
+  - wandb
 name: ocp_models
