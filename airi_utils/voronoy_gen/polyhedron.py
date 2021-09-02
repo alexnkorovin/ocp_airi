@@ -1,12 +1,13 @@
+import geometry as gm
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as a3
 import numpy as np
 import pylab as pl
+from graph import GraphComparator, SimpleGraph
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
 
-import geometry as gm
-from graph import GraphComparator, SimpleGraph
+np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class Polygon:
