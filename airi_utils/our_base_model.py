@@ -387,7 +387,7 @@ trace_system = dict(list(next(iter(training_generator))[0]))
 writer.add_graph(model, trace_system)
 writer.add_text(timestamp, str(logfile_str))
 
-time_now = datetime.now().time()
+time_now = datetime.now()
 loss = []
 loss_eval = []
 
@@ -412,5 +412,5 @@ for i in range(epochs):
 writer.close()
 
 print(
-    f"Done for, s: {datetime.now().time() - time_now} s; Loss: {min(loss_eval)}"
+    f"Done for, s: {(datetime.now() - time_now).seconds} s; Loss: {min(loss_eval)}"
 )
