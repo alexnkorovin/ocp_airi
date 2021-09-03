@@ -16,7 +16,57 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
 from torch_scatter import scatter
 
+# CONFIG ------------------------------------------------------
 voronoi_volumes_str = "voloroi_volumes"
+
+# for colab
+# train_dataset_file_path = "/content/drive/MyDrive/ocp_datasets/data/is2re/10k/train/structures_train.pkl"
+
+
+# user specific folder
+train_dataset_file_path = os.path.expanduser(
+    "../../ocp_datasets/data/is2re/10k/train/structures.pkl"
+)
+# train_dataset_file_path= "../../ocp_datasets/data/is2re/10k/train/structures_tain.pkl"
+
+val_dataset_file_path = os.path.expanduser(
+    "../../ocp_datasets/data/is2re/all/val_ood_both/structures.pkl"
+)
+# val_dataset_file_path = os.path.expanduser("~/Downloads/structures_train.pkl")
+
+
+# features_cols = ['voloroi_volumes', 'voronoi_surface_areas', 'electronegativity',
+#                  'dipole_polarizability', 'edge_index_new', 'distances_new', 'contact_solid_angles']
+
+# features_cols = ['atomic_numbers', 'edge_index_new', 'distances_new',
+#                  'contact_solid_angles', 'tags', 'voronoi_volumes', 'spherical_domain_radii']
+# target_col = 'y_relaxed'
+
+features_cols = [
+    "atomic_numbers",
+    "edge_index_new",
+    "distances_new",
+    "contact_solid_angles",
+    "tags",
+    voronoi_volumes_str,
+    "spherical_domain_radii",
+]
+target_col = "y_relaxed"
+
+batch_size = 256
+num_workers = 0
+epochs = 50
+
+logfile_str = {
+    "train_dataset_file_path": train_dataset_file_path,
+    "val_dataset_file_path": val_dataset_file_path,
+    "features_cols": features_cols,
+    "target_col": target_col,
+    "batch_size": batch_size,
+    "num_workers": num_workers,
+    "epochs": epochs,
+}
+# -----------------------------------------------------
 
 
 def my_reshape(tensor):
@@ -48,7 +98,9 @@ def simple_preprocessing(batch):
     angles = torch.Tensor(batch["contact_solid_angles"])
     angles = my_reshape(angles)
 
-    edges_embeds = torch.cat((distances, angles), 1)
+    edge_features = (distances, angles)
+
+    edges_embeds = torch.cat(edge_features, 1)
 
     return Data(
         x=atom_embeds.to(device),
@@ -129,11 +181,21 @@ class GConv(MessagePassing):
 class ConvNN(nn.Module):
     def __init__(self, dim_atom=103, dim_edge=2):
         super().__init__()
-        #         self.conv_1 = GConv(dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom)
-        #         self.conv_2 = GConv(dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom)
-        #         self.conv_3 = GConv(dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom)
-        #         self.conv_4 = GConv(dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom)
-        #         self.conv_5 = GConv(dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom)
+        self.conv_1 = GConv(
+            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
+        )
+        self.conv_2 = GConv(
+            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
+        )
+        self.conv_3 = GConv(
+            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
+        )
+        self.conv_4 = GConv(
+            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
+        )
+        self.conv_5 = GConv(
+            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
+        )
         self.conv_last = GConv(
             dim_atom=dim_atom, dim_edge=dim_edge, out_channels=2
         )
@@ -141,12 +203,12 @@ class ConvNN(nn.Module):
         self.lin = torch.nn.Linear(2, 1, bias=True)
 
     def forward(self, batch):
-        #         convoluted_1 = self.conv_1(batch)
-        #         convoluted_2 = self.conv_2(convoluted_1)
-        #         convoluted_3 = self.conv_3(convoluted_2)
-        #         convoluted_4 = self.conv_4(convoluted_3)
-        #         convoluted_5 = self.conv_5(convoluted_4)
-        convoluted_last = self.conv_last(batch)["x"]
+        convoluted_1 = self.conv_1(batch)
+        convoluted_2 = self.conv_2(convoluted_1)
+        convoluted_3 = self.conv_3(convoluted_2)
+        convoluted_4 = self.conv_4(convoluted_3)
+        convoluted_5 = self.conv_5(convoluted_4)
+        convoluted_last = self.conv_last(convoluted_5)["x"]
         scattered = scatter(
             convoluted_last, batch["batch"], dim=0, reduce="sum"
         )
@@ -262,43 +324,8 @@ def read_df(filename):
     return df
 
 
-# for colab
-# train_dataset_file_path = "/content/drive/MyDrive/ocp_datasets/data/is2re/10k/train/structures_train.pkl"
-
-# user specific folder
-train_dataset_file_path = os.path.expanduser(
-    "../../ocp_datasets/data/is2re/10k/train/structures.pkl"
-)
-# train_dataset_file_path= "../../ocp_datasets/data/is2re/10k/train/structures_tain.pkl"
-
-val_dataset_file_path = os.path.expanduser(
-    "../../ocp_datasets/data/is2re/all/val_ood_both/structures.pkl"
-)
-# val_dataset_file_path = os.path.expanduser("~/Downloads/structures_train.pkl")
-
 df_train = read_df(train_dataset_file_path)
 df_val = read_df(val_dataset_file_path)
-
-batch_size = 64
-num_workers = 0
-
-# features_cols = ['voloroi_volumes', 'voronoi_surface_areas', 'electronegativity',
-#                  'dipole_polarizability', 'edge_index_new', 'distances_new', 'contact_solid_angles']
-
-# features_cols = ['atomic_numbers', 'edge_index_new', 'distances_new',
-#                  'contact_solid_angles', 'tags', 'voronoi_volumes', 'spherical_domain_radii']
-# target_col = 'y_relaxed'
-
-features_cols = [
-    "atomic_numbers",
-    "edge_index_new",
-    "distances_new",
-    "contact_solid_angles",
-    "tags",
-    voronoi_volumes_str,
-    "spherical_domain_radii",
-]
-target_col = "y_relaxed"
 
 # инициализируем тренировочный датасети и тренировочный итератор
 training_set = Dataset(df_train, features_cols, target_col)
@@ -338,7 +365,7 @@ criterion = nn.L1Loss()
 model = model.to(device)
 criterion = criterion.to(device)
 
-timestamp = str(datetime.now()).split(".")[0]
+timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
 
 print(timestamp)
 
@@ -358,10 +385,12 @@ writer = SummaryWriter(log_file_path + "/" + timestamp)
 # граф модели
 trace_system = dict(list(next(iter(training_generator))[0]))
 writer.add_graph(model, trace_system)
+writer.add_text(timestamp, str(logfile_str))
 
+time_now = datetime.now().time()
 loss = []
 loss_eval = []
-epochs = 50
+
 print(timestamp)
 print(f"Start training model {str(model)}")
 for i in range(epochs):
@@ -382,4 +411,6 @@ for i in range(epochs):
 
 writer.close()
 
-print(min(loss_eval))
+print(
+    f"Done for, s: {datetime.now().time() - time_now} s; Loss: {min(loss_eval)}"
+)
