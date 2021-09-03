@@ -177,38 +177,93 @@ class GConv(MessagePassing):
         return Data(x=gamma, edge_attr=edge_attr, edge_index=edge_index)
 
 
+class ShiftedSoftplus(torch.nn.Module):
+    def __init__(self):
+        super(ShiftedSoftplus, self).__init__()
+        self.shift = torch.log(torch.tensor(2.0)).item()
+
+    def forward(self, x):
+        return F.softplus(x) - self.shift
+
+
+class InteractionBlock(nn.Module):
+    def __init__(self, dim_atom, dim_edge, num_filters):
+        super(InteractionBlock, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(dim_edge, dim_atom),
+            ShiftedSoftplus(),
+            nn.Linear(dim_atom, num_filters),
+        )
+        self.conv = CFConv(dim_atom, dim_atom, num_filters, self.mlp)
+        self.act = ShiftedSoftplus()
+        self.lin = nn.Linear(dim_atom, num_filters)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.xavier_uniform_(self.mlp[0].weight)
+        self.mlp[0].bias.data.fill_(0)
+        torch.nn.init.xavier_uniform_(self.mlp[2].weight)
+        self.mlp[0].bias.data.fill_(0)
+        self.conv.reset_parameters()
+        torch.nn.init.xavier_uniform_(self.lin.weight)
+        self.lin.bias.data.fill_(0)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = self.conv(x, edge_index, edge_attr)
+        x = self.act(x)
+        x = self.lin(x)
+        return x
+
+
+class CFConv(MessagePassing):
+    def __init__(self, in_channels, out_channels, num_filters, n_n):
+        super(CFConv, self).__init__(aggr="add")
+        self.lin1 = nn.Linear(in_channels, num_filters, bias=False)
+        self.lin2 = nn.Linear(num_filters, out_channels)
+        self.nn = n_n
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.xavier_uniform_(self.lin1.weight)
+        torch.nn.init.xavier_uniform_(self.lin2.weight)
+        self.lin2.bias.data.fill_(0)
+
+    def forward(self, x, edge_index, edge_attr):
+        W = self.nn(edge_attr)
+
+        x = self.lin1(x)
+        x = self.propagate(edge_index, x=x, W=W)
+        x = self.lin2(x)
+        return x
+
+    def message(self, x_j, W):
+        return x_j * W
+
+
 # собственно нейросеть
 class ConvNN(nn.Module):
-    def __init__(self, dim_atom=103, dim_edge=2):
+    def __init__(self, dim_atom=103, dim_edge=2, out_channels=50):
         super().__init__()
-        self.conv_1 = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
-        )
-        self.conv_2 = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
-        )
-        self.conv_3 = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
-        )
-        self.conv_4 = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
-        )
-        self.conv_5 = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=dim_atom
-        )
-        self.conv_last = GConv(
-            dim_atom=dim_atom, dim_edge=dim_edge, out_channels=2
+
+        self.conv_1 = InteractionBlock(
+            dim_atom=dim_atom, dim_edge=dim_edge, num_filters=dim_atom
         )
 
-        self.lin = torch.nn.Linear(2, 1, bias=True)
+        self.conv_last = InteractionBlock(
+            dim_atom=dim_atom, dim_edge=dim_edge, num_filters=out_channels
+        )
+
+        self.lin = torch.nn.Linear(out_channels, 1, bias=True)
 
     def forward(self, batch):
-        convoluted_1 = self.conv_1(batch)
-        convoluted_2 = self.conv_2(convoluted_1)
-        convoluted_3 = self.conv_3(convoluted_2)
-        convoluted_4 = self.conv_4(convoluted_3)
-        convoluted_5 = self.conv_5(convoluted_4)
-        convoluted_last = self.conv_last(convoluted_5)["x"]
+        convoluted_1 = self.conv_1(
+            batch["x"], batch["edge_index"], batch["edge_attr"]
+        )
+        convoluted_last = self.conv_last(
+            convoluted_1, batch["edge_index"], batch["edge_attr"]
+        )
         scattered = scatter(
             convoluted_last, batch["batch"], dim=0, reduce="sum"
         )
