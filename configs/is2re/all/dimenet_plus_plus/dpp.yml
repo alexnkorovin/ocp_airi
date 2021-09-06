@@ -23,13 +23,13 @@ model:
 optim:
   batch_size: 4
   eval_batch_size: 4
-  num_workers: 4
+  num_workers: 20
   lr_initial: 0.0001
   lr_gamma: 0.1
   lr_milestones: # steps at which lr_initial <- lr_initial * lr_gamma
-    - 115082
-    - 230164
-    - 345246
-  warmup_steps: 57541
+    - 400000
+    - 800000
+    - 1000000
+  warmup_steps: 200000
   warmup_factor: 0.2
-  max_epochs: 20
+  max_epochs: 50
