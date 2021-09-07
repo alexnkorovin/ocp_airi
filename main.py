@@ -40,7 +40,7 @@ sys.argv = [
     "--mode",
     "train",
     "--config-yml",
-    "configs/is2re/all/dimenet_plus_plus/dpp.yml",
+    "configs/is2re/10k/schnet/schnet.yml",
 ]
 
 
