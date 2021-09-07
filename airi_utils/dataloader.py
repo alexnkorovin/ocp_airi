@@ -84,3 +84,21 @@ class lmdb_dataset(Dataset):
 
     def close_db(self):
         self.env.close()
+
+    def describe(self, idx=0):
+        self.idx = idx
+        dataset = self[self.idx]
+        print(f"item: {self.idx}")
+        for key in dataset.keys:
+            # print(type(dataset[key]))
+            obj = dataset[key]
+            dot = 25
+
+            if "torch.Tensor" in str(type(obj)):
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(list(obj.shape)):>10}'
+                )
+            elif type(obj) is float:
+                print(f'{key}:{"." * (dot - len(key))}{obj:>10.4f}')
+            else:
+                print(f'{key}:{"." * (dot - len(key))}{obj:>10}')
