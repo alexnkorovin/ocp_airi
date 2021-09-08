@@ -13,7 +13,8 @@ from torch.utils.data import Dataset
 
 
 class lmdb_dataset(Dataset):
-    r"""Dataset class to load from LMDB files containing single point computations.
+    r"""Dataset class to load from LMDB files containing
+    single point computations.
     Useful for Initial Structure to Relaxed Energy (IS2RE) task.
 
     Args:
