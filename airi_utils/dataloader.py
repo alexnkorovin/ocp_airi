@@ -27,7 +27,7 @@ class lmdb_dataset(Dataset):
 
         self.config = config
 
-        self.db_path = self.config["src"]
+        self.db_path = self.config
         assert os.path.isfile(self.db_path), "{} not found".format(
             self.db_path
         )
