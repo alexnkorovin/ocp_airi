@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 import os
 import pickle
+import zlib
 
 import lmdb
 from torch.utils.data import Dataset
@@ -23,12 +24,13 @@ class lmdb_dataset(Dataset):
             (default: :obj:`None`)
     """
 
-    def __init__(self, config, transform=None):
+    def __init__(self, config, transform=None, compressed=False):
         super().__init__()
 
         self.config = config
 
         self.db_path = self.config
+        self.compressed = compressed
         assert os.path.isfile(self.db_path), "{} not found".format(
             self.db_path
         )
@@ -62,7 +64,13 @@ class lmdb_dataset(Dataset):
     def __getitem__(self, idx):
         # Return features.
         datapoint_pickled = self.env.begin().get(self._keys[idx])
-        data_object = pickle.loads(datapoint_pickled)
+
+        data_object = (
+            pickle.loads(zlib.decompress(datapoint_pickled))
+            if self.compressed is True
+            else pickle.loads(datapoint_pickled)
+        )
+
         data_object = (
             data_object
             if self.transform is None
