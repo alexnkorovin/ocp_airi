@@ -47,7 +47,7 @@ def train(model, iterator, optimizer, criterion, print_every=10, epoch=0, writer
 
 def evaluate(model, iterator, criterion, epoch=0, writer=False, device='cpu'):
     
-    print(f'epoch {i} evaluation')
+    print(f'epoch {epoch} evaluation')
     
     epoch_loss = 0
     
