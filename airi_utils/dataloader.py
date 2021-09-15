@@ -111,3 +111,12 @@ class lmdb_dataset(Dataset):
                 print(f'{key}:{"." * (dot - len(key))}{obj:>10.4f}')
             else:
                 print(f'{key}:{"." * (dot - len(key))}{obj:>10}')
+
+    def info(self):
+        self.env.info()
+
+    def set_map_size(self, map_size):
+        self.env.set_mapsize(map_size)
+
+    def stat(self):
+        self.env.stat()
