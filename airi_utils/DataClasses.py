@@ -102,7 +102,7 @@ class lmdb_dataset(Dataset):
             if self.transform is None
             else self.transform(data_object)
         )
-
+        # print(self.env.info())
         return data_object
 
     def connect_db(self, lmdb_path=None):
@@ -112,10 +112,11 @@ class lmdb_dataset(Dataset):
             subdir=False,
             readonly=True,
             lock=False,
-            readahead=False,
+            readahead=True,
             meminit=False,
-            max_readers=1,
+            max_readers=1000,
         )
+        print(env.info())
         return env
 
     def close_db(self):
@@ -147,13 +148,14 @@ class lmdb_dataset(Dataset):
                 print(f'{key}:{"." * (dot - len(key))}{type(obj)>10}')
 
     def info(self):
-        self.env.info()
+        print(self.env.info())
 
     def set_map_size(self, map_size):
         self.env.set_mapsize(map_size)
+        print(f'map_size: {self.env.info()["map_size"]}')
 
     def stat(self):
-        self.env.stat()
+        print(self.env.stat())
 
 
 class Dataset(pyg_Dataset):
