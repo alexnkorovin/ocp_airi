@@ -4,8 +4,10 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+import _pickle as pickle
+import gc
 import os
-import pickle
+import pickle as pkl
 import zlib
 
 import lmdb
@@ -59,6 +61,7 @@ class lmdb_dataset(Dataset):
             f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
         ]
 
+        #        self._keys = [f"{j}".encode("ascii") for j in txn.cursor().iternext(key=True, value=False)]
         self.transform = transform
 
     def __len__(self):
@@ -82,7 +85,7 @@ class lmdb_dataset(Dataset):
     def __getitem__(self, idx):
         # Return features.
         datapoint_pickled = self.env.begin().get(self._keys[idx])
-
+        gc.disable()
         if self.multiproc is False:
             data_object = (
                 pickle.loads(zlib.decompress(datapoint_pickled))
@@ -102,6 +105,7 @@ class lmdb_dataset(Dataset):
             if self.transform is None
             else self.transform(data_object)
         )
+        gc.enable()
         # print(self.env.info())
         return data_object
 
@@ -116,7 +120,7 @@ class lmdb_dataset(Dataset):
             meminit=False,
             max_readers=1000,
         )
-        print(env.info())
+        # print(env.info())
         return env
 
     def close_db(self):
@@ -124,9 +128,18 @@ class lmdb_dataset(Dataset):
 
     def describe(self, idx=0):
         self.idx = idx
-        dataset = self[self.idx]
-        print(f"item: {self.idx}")
-        for key in dataset.keys():
+        print(f'total entries: {self.env.stat()["entries"]}')
+
+        dataset = self.__getitem__(idx)
+        print(f"info for item: {self.idx}")
+
+        try:
+            keys = dataset.keys()
+
+        except TypeError:
+            keys = dataset.keys
+
+        for key in keys:
             # print(type(dataset[key]))
             obj = dataset[key]
             dot = 25
