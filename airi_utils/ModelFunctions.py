@@ -47,7 +47,7 @@ def train(
     for i, (systems, ys) in enumerate(iterator):
 
         optimizer.zero_grad()
-        predictions = model(systems).squeeze()
+        predictions = model(systems.to(device)).squeeze()
 
         loss = criterion(predictions.float(), ys.to(device).float())
         loss.backward()
@@ -87,7 +87,7 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
     with torch.no_grad():
         for systems, ys in iterator:
 
-            predictions = model(systems).squeeze()
+            predictions = model(systems.to(device)).squeeze()
             loss = criterion(predictions.float(), ys.to(device).float())
 
             epoch_loss += loss.item()
@@ -115,7 +115,7 @@ def inference(model, iterator):
 
     with torch.no_grad():
         for systems, ys in iterator:
-            predictions = model(systems).squeeze()
+            predictions = model(systems.to(device)).squeeze()
             y = torch.cat((y, predictions))
 
     return y
