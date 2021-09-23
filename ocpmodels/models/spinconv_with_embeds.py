@@ -27,11 +27,15 @@ from ocpmodels.models.base import BaseModel
 
 from ocpmodels.datasets.embeddings.continuous_embeddings import CONTINUOUS_EMBEDDINGS
 
-array_cont_embeddings = []
-for key in CONTINUOUS_EMBEDDINGS:
-    array_cont_embeddings.append(CONTINUOUS_EMBEDDINGS[key][:-2] + [CONTINUOUS_EMBEDDINGS[key][-1]])
 
-CONTINUOUS_EMBEDDINGS = torch.tensor(array_cont_embeddings)
+def ce_to_tensor(continuous_embeddings):
+    array_cont_embeddings = []
+    for key in continuous_embeddings:
+        array_cont_embeddings.append(continuous_embeddings[key][:-2] + [continuous_embeddings[key][-1]])
+    continuous_embeddings = torch.tensor(array_cont_embeddings)
+    array_cont_embeddings = []
+
+    return continuous_embeddings
 
 try:
     from e3nn import o3
@@ -1124,13 +1128,15 @@ class CustomEmbedding(torch.nn.Module):
         super(CustomEmbedding, self).__init__()
         self.max_num = max_num
         self.emb_size = emb_size
-        self.len_real = len(CONTINUOUS_EMBEDDINGS[1])
+        self.continuous_embeddings = ce_to_tensor(CONTINUOUS_EMBEDDINGS)
+        self.len_real = self.continuous_embeddings.shape[1]
         self.EmbeddingLayer = nn.Linear(self.max_num + self.len_real, self.emb_size)
         self.weight = self.EmbeddingLayer.weight
 
     def forward(self, atomic_numbers):
         one_hot = F.one_hot(atomic_numbers, self.max_num).float()
-        real = CONTINUOUS_EMBEDDINGS[atomic_numbers]
+        device = one_hot.device
+        real = self.continuous_embeddings[atomic_numbers].to(device)
         embedding = torch.cat((one_hot, real), dim=1)
 
         return self.EmbeddingLayer(embedding)
