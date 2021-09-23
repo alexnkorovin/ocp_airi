@@ -204,7 +204,7 @@ class spinconv(BaseModel):
 
         if self.otf_graph:
             edge_index, cell_offsets, neighbors = radius_graph_pbc(
-                data, self.cutoff, 100
+                data, self.cutoff, 100, self.device
             )
             data.edge_index = edge_index
             data.cell_offsets = cell_offsets
@@ -1114,6 +1114,7 @@ class SpinConvBlock(torch.nn.Module):
         x = self.GroupNorm(x)
 
         return x
+
 
 class CustomEmbedding(torch.nn.Module):
     def __init__(self,
