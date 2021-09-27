@@ -8,13 +8,17 @@ import _pickle as pickle
 import gc
 import os
 import pickle as pkl
-import torch
 import zlib
+from typing import List, Union
 
 import lmdb
+import torch
 from joblib import Parallel, delayed
 from torch.utils.data import Dataset
+from torch_geometric.data import Data
 from torch_geometric.data import Dataset as pyg_Dataset
+
+### код прямиком из PyG чтобы не обновлять библиотеку
 
 
 def pickle_load_z(datapoint_pickled):
@@ -147,19 +151,37 @@ class lmdb_dataset(Dataset):
 
             if "torch.Tensor" in str(type(obj)):
                 print(
-                    f'{key}:{"." * (dot - len(key))}{str(list(obj.shape)):>10}'
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{str(list(obj.shape)):>10}'
                 )
             elif type(obj) is float:
-                print(f'{key}:{"." * (dot - len(key))}{obj:>10.4f}')
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{obj:>10.4f}'
+                )
 
             elif type(obj) is int:
-                print(f'{key}:{"." * (dot - len(key))}{obj:>10}')
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{obj:>10}'
+                )
 
             elif type(obj) is list:
-                print(f'{key}:{"." * (dot - len(key))}{len(obj):>10}')
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
+
+            elif type(obj) is list:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
+
+            elif type(obj) is str:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
 
             else:
-                print(f'{key}:{"." * (dot - len(key))}{type(obj)>10}')
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{type(obj):>10}'
+                )
 
     def info(self):
         print(self.env.info())
@@ -197,19 +219,11 @@ class Dataset(pyg_Dataset):
         system = self.preprocessing(self.data[index])
 
         if self.type_ == "train":
-            system.y = torch.tensor(self.data[index][self.target]).reshape((1, 1))
+            system.y = torch.tensor(self.data[index][self.target]).reshape(
+                (1, 1)
+            )
 
         return system
-
-    
-    
-###код прямиком из PyG чтобы не обновлять библиотеку
-from typing import Union, List
-
-import torch
-
-from torch_geometric.data import Data 
-from torch_geometric.data import Dataset as pyg_Dataset
 
 
 def collate_fn(data_list):
@@ -234,10 +248,21 @@ class DataListLoader(torch.utils.data.DataLoader):
             :class:`torch.utils.data.DataLoader`, such as :obj:`drop_last` or
             :obj:`num_workers`.
     """
-    def __init__(self, dataset: Union[pyg_Dataset, List[Data]],
-                 batch_size: int = 1, shuffle: bool = False, **kwargs):
-        if 'collate_fn' in kwargs:
-            del kwargs['collate_fn']
 
-        super().__init__(dataset, batch_size=batch_size, shuffle=shuffle,
-                         collate_fn=collate_fn, **kwargs)
+    def __init__(
+        self,
+        dataset: Union[pyg_Dataset, List[Data]],
+        batch_size: int = 1,
+        shuffle: bool = False,
+        **kwargs,
+    ):
+        if "collate_fn" in kwargs:
+            del kwargs["collate_fn"]
+
+        super().__init__(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=collate_fn,
+            **kwargs,
+        )
