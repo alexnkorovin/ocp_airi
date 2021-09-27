@@ -44,12 +44,14 @@ def train(
 
     model.train()
 
-    for i, (systems, ys) in enumerate(iterator):
+    for i, data_list in enumerate(iterator):
 
+        ys = torch.cat([data.y for data in data_list]).to(device)
         optimizer.zero_grad()
-        predictions = model(systems.to(device)).squeeze()
+        predictions = model(data_list).squeeze()
+        predictions = predictions.reshape((predictions.shape[0], 1))
 
-        loss = criterion(predictions.float(), ys.to(device).float())
+        loss = criterion(predictions.float(), ys.float())
         loss.backward()
 
         optimizer.step()
@@ -63,12 +65,12 @@ def train(
 
             step = i + epoch * len(iterator)
 
-            send_hist(model, writer, i)
             send_scalars(
                 lr, batch_loss, writer, step=step, epoch=epoch, type_="train"
             )
 
         if not (i + 1) % print_every:
+            send_hist(model, writer, i)
             print(f"step {i} from {len(iterator)} at epoch {epoch}")
             print(f"Loss: {batch_loss}")
 
@@ -85,9 +87,13 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
     model.eval()
 
     with torch.no_grad():
-        for systems, ys in iterator:
-
-            predictions = model(systems.to(device)).squeeze()
+        
+        for data_list in iterator:
+            
+            ys = torch.cat([data.y for data in data_list]).to(device)
+            predictions = model(data_list).squeeze()
+            predictions = predictions.reshape((predictions.shape[0], 1))  
+                
             loss = criterion(predictions.float(), ys.to(device).float())
 
             epoch_loss += loss.item()
@@ -114,8 +120,9 @@ def inference(model, iterator):
     model.eval()
 
     with torch.no_grad():
-        for systems, ys in iterator:
-            predictions = model(systems.to(device)).squeeze()
+        for data_list in iterator:
+            predictions = model(data_list).squeeze()
+            predictions = predictions.reshape((predictions.shape[0], 1))  
             y = torch.cat((y, predictions))
 
     return y
