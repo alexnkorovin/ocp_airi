@@ -25,17 +25,8 @@ from ocpmodels.common.utils import (
 )
 from ocpmodels.models.base import BaseModel
 
-from ocpmodels.datasets.embeddings.continuous_embeddings import CONTINUOUS_EMBEDDINGS
-
-
-def ce_to_tensor(continuous_embeddings):
-    array_cont_embeddings = []
-    for key in continuous_embeddings:
-        array_cont_embeddings.append(continuous_embeddings[key][:-2] + [continuous_embeddings[key][-1]])
-    continuous_embeddings = torch.tensor(array_cont_embeddings)
-    array_cont_embeddings = []
-
-    return continuous_embeddings
+with open('cgcnn_embeds.pickle', 'br') as f:
+    continuous_embeddings = torch.load(f).float()
 
 try:
     from e3nn import o3
@@ -1122,22 +1113,18 @@ class SpinConvBlock(torch.nn.Module):
 
 class CustomEmbedding(torch.nn.Module):
     def __init__(self,
-                 max_num,
                  emb_size
     ):
         super(CustomEmbedding, self).__init__()
-        self.max_num = max_num
         self.emb_size = emb_size
-        self.continuous_embeddings = ce_to_tensor(CONTINUOUS_EMBEDDINGS)
-        self.len_real = self.continuous_embeddings.shape[1]
-        self.EmbeddingLayer = nn.Linear(self.max_num + self.len_real, self.emb_size)
+        self.continuous_embeddings = continuous_embeddings
+        self.len_emb = self.continuous_embeddings.shape[1]
+        self.EmbeddingLayer = nn.Linear(self.len_emb, self.emb_size)
         self.weight = self.EmbeddingLayer.weight
 
     def forward(self, atomic_numbers):
-        one_hot = F.one_hot(atomic_numbers, self.max_num).float()
-        device = one_hot.device
-        real = self.continuous_embeddings[atomic_numbers].to(device)
-        embedding = torch.cat((one_hot, real), dim=1)
+        device = atomic_numbers.device
+        embedding = continuous_embeddings[atomic_numbers].to(device)
 
         return self.EmbeddingLayer(embedding)
 
@@ -1171,12 +1158,8 @@ class EmbeddingBlock(torch.nn.Module):
             self.mid_hidden_channels, self.out_hidden_channels
         )
 
-        self.source_embedding = CustomEmbedding(
-            max_num_elements, self.embedding_size
-        )
-        self.target_embedding = CustomEmbedding(
-            max_num_elements, self.embedding_size
-        )
+        self.source_embedding = CustomEmbedding(self.embedding_size)
+        self.target_embedding = CustomEmbedding(self.embedding_size)
         nn.init.uniform_(self.source_embedding.weight.data, -0.0001, 0.0001)
         nn.init.uniform_(self.target_embedding.weight.data, -0.0001, 0.0001)
 
