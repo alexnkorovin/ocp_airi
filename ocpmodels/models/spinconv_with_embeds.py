@@ -25,7 +25,7 @@ from ocpmodels.common.utils import (
 )
 from ocpmodels.models.base import BaseModel
 
-with open('cgcnn_embeds.pickle', 'br') as f:
+with open('/share/catalyst/ocp_airi/ocpmodels/models/cgcnn_embeds.pickle', 'br') as f:
     continuous_embeddings = torch.load(f).float()
 
 try:

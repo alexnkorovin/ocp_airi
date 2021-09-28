@@ -105,7 +105,14 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
             None, overall_loss, writer, step=None, epoch=epoch, type_="val"
         )
     timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    torch.save(model, 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle')
+    
+    file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
+    
+    path = os.path.expanduser("".join('../logs/epoch/', file_name))
+    
+    # model_name = os.path.basename(os.path.realpath(__file__))
+
+    torch.save(model, path)
     print(f"epoch loss {overall_loss}")
     print(
         "========================================================================================================"
