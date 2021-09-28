@@ -105,7 +105,7 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
             None, overall_loss, writer, step=None, epoch=epoch, type_="val"
         )
     timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    torch.save(model, 'epoch ' + i + ' ' + timestamp + '.pickle')
+    torch.save(model, 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle')
     print(f"epoch loss {overall_loss}")
     print(
         "========================================================================================================"
