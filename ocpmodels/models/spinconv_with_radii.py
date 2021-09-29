@@ -234,7 +234,7 @@ class spinconv(BaseModel):
             msdn = torch.masked_select(edge_distance, mask)
             msei = torch.masked_select(edge_index, mask)
             
-            edge_index = msei
+            edge_index = msei.view(2, -1)
             edge_distance  = msdn
             
             j, i = edge_index
