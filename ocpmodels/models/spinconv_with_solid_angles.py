@@ -120,6 +120,13 @@ class spinconv(BaseModel):
             basis_width_scalar,
         )
 
+        self.solid_angles_smearing = GaussianSmearing(
+            0.,
+            50.,
+            num_basis_functions,
+            2.
+        )
+
         # Weights for message initialization
         self.embeddingblock2 = EmbeddingBlock(
             self.mid_hidden_channels,
@@ -138,12 +145,13 @@ class spinconv(BaseModel):
         )
 
         self.dist_block = DistanceBlock(
-            self.num_basis_functions,
+            self.num_basis_functions+self.num_basis_functions+3,
             self.mid_hidden_channels,
             self.max_num_elements,
             self.distance_block_scalar_max,
             self.distance_expansion_forces,
             self.scale_distances,
+            self.solid_angles_smearing
         )
 
         self.message_blocks = ModuleList()
@@ -206,44 +214,40 @@ class spinconv(BaseModel):
             data.neighbors = neighbors
 
         if self.use_pbc:
-            assert (
-                atomic_numbers.dim() == 1
-                and atomic_numbers.dtype == torch.long
-            )
+            print("ERROR! DON'T USE PBC")
 
-            out = get_pbc_distances(
-                pos,
-                data.edge_index,
-                data.cell,
-                data.cell_offsets,
-                data.neighbors,
-                return_distance_vec=True,
-            )
-
-            edge_index = out["edge_index"]
-            edge_distance = out["distances"]
-            edge_distance_vec = out["distance_vec"]
 
         else:
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
             
             edge_distance = data["distances_new"]
             edge_index = data["edge_index_new"]
-
+            solid_angles = data['contact_solid_angles']
+            direct_neighbors = data['direct_neighbor']
             mask = edge_distance < self.cutoff_radii
             msdn = torch.masked_select(edge_distance, mask)
+            # two_d_mask = mask.reshape((1, len(mask)))
+            # two_d_mask = torch.cat((two_d_mask, two_d_mask), dim=0)
+            # msei = edge_index[two_d_mask]
+            # masked_index = torch.arange(edge_index.shape[1])
+            # masked_index = masked_index[mask]
+            # msei = edge_index[:, masked_index]
             msei = torch.masked_select(edge_index, mask)
+            masked_solid_angles = torch.masked_select(solid_angles, mask)
+            masked_direct_neighbors = torch.masked_select(direct_neighbors, mask)
             
             edge_index = msei.view(2, -1)
-            edge_distance  = msdn
+            edge_distance = msdn
 
             sorted_indices = torch.argsort(edge_index[1])
             edge_index = edge_index[:, sorted_indices]
             edge_distance = edge_distance[sorted_indices]
+            masked_solid_angles = solid_angles[sorted_indices]
+            masked_direct_neighbors = direct_neighbors[sorted_indices]
 
             j, i = edge_index
             edge_distance_vec = pos[j] - pos[i]
-
+            
             # edge_distance = edge_distance_vec.norm(dim=-1)
 
         # edge_index, edge_distance, edge_distance_vec = self._filter_edges(
@@ -252,9 +256,9 @@ class spinconv(BaseModel):
         #     edge_distance_vec,
         #     self.max_num_neighbors,
         # )
-
+        edge_attrs = (edge_distance, masked_solid_angles, masked_direct_neighbors)
         outputs = self._forward_helper(
-            data, edge_index, edge_distance, edge_distance_vec
+            data, edge_index, edge_attrs, edge_distance_vec
         )
         if self.show_timing_info is True:
             torch.cuda.synchronize()
@@ -271,7 +275,7 @@ class spinconv(BaseModel):
 
     # restructure forward helper for conditional grad
     def _forward_helper(
-        self, data, edge_index, edge_distance, edge_distance_vec
+        self, data, edge_index, edge_attrs, edge_distance_vec
     ):
         ###############################################################
         # Initialize messages
@@ -280,7 +284,7 @@ class spinconv(BaseModel):
         source_element = data.atomic_numbers[edge_index[0, :]].long()
         target_element = data.atomic_numbers[edge_index[1, :]].long()
 
-        x_dist = self.dist_block(edge_distance, source_element, target_element)
+        x_dist = self.dist_block(edge_attrs, source_element, target_element)
 
         x = x_dist
         x = self.distfc1(x)
@@ -1200,6 +1204,7 @@ class DistanceBlock(torch.nn.Module):
         scalar_max,
         distance_expansion,
         scale_distances,
+        solid_angles_smearing
     ):
         super(DistanceBlock, self).__init__()
         self.in_channels = in_channels
@@ -1208,6 +1213,7 @@ class DistanceBlock(torch.nn.Module):
         self.distance_expansion = distance_expansion
         self.scalar_max = scalar_max
         self.scale_distances = scale_distances
+        self.solid_angles_smearing = solid_angles_smearing
 
         if self.scale_distances:
             self.dist_scalar = nn.Embedding(
@@ -1221,7 +1227,11 @@ class DistanceBlock(torch.nn.Module):
 
         self.fc1 = nn.Linear(self.in_channels, self.out_channels)
 
-    def forward(self, edge_distance, source_element, target_element):
+    def forward(self, edge_attrs, source_element, target_element):
+        edge_distance, edge_solid_angles, edge_direct_neighbors = edge_attrs
+        edge_solid_angles = self.solid_angles_smearing(edge_solid_angles)
+        edge_direct_neighbors = torch.nn.functional.one_hot(edge_direct_neighbors, num_classes=3).float()
+
         if self.scale_distances:
             embedding_index = (
                 source_element * self.max_num_elements + target_element
@@ -1235,11 +1245,12 @@ class DistanceBlock(torch.nn.Module):
             )
             scalar = torch.exp(scalar_max * scalar)
             offset = self.dist_offset(embedding_index).view(-1)
-            x = self.distance_expansion(scalar * edge_distance + offset)
+            edge_distance = self.distance_expansion(scalar * edge_distance + offset)
         else:
-            x = self.distance_expansion(edge_distance)
+            edge_distance = self.distance_expansion(edge_distance)
 
-        x = self.fc1(x.float())
+        x = torch.cat((edge_distance, edge_solid_angles, edge_direct_neighbors), dim=1).float()
+        x = self.fc1(x)
 
         return x
 
