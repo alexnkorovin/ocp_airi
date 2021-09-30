@@ -196,7 +196,7 @@ class spinconv(BaseModel):
         self.num_atoms = len(data.batch)
         self.batch_size = len(data.natoms)
 
-        # atomic_numbers = data.atomic_numbers.long()
+        atomic_numbers = data.atomic_numbers.long()
         pos = data.pos
         if self.regress_forces:
             pos = pos.requires_grad_(True)
@@ -230,21 +230,24 @@ class spinconv(BaseModel):
 
         else:
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
-            
+
             edge_distance = data["distances_new"]
             edge_index = data["edge_index_new"]
-            
+            edge_distance_vec = data['edge_distance_vec']
+
             mask = edge_distance < self.cutoff_radii
-            msdn = torch.masked_select(edge_distance, mask)
-            msei = torch.masked_select(edge_index, mask)
-            
-            edge_index = msei.view(2, -1)
-            edge_distance  = msdn
+            masked_indices = torch.arange(len(edge_distance))[mask]
+            msdn = edge_distance[masked_indices]
+            msei = edge_index[:, masked_indices]
+            edge_distance_vec = edge_distance_vec[masked_indices, :]
+
+            edge_index = msei
+            edge_distance = msdn
+
             sorted_indices = torch.argsort(edge_index[1])
             edge_index = edge_index[:, sorted_indices]
             edge_distance = edge_distance[sorted_indices]
-            j, i = edge_index
-            edge_distance_vec = pos[j] - pos[i]
+            edge_distance_vec = edge_distance_vec[sorted_indices, :]
             
             # edge_distance = edge_distance_vec.norm(dim=-1)
 
@@ -1194,7 +1197,7 @@ class EmbeddingBlock(torch.nn.Module):
 
     def forward(self, x, source_element, target_element, atomic_numbers, val_vor, tag):
 
-        # print(source_element, target_element, source_element.shape, target_element.shape)
+        print(source_element, target_element, source_element.shape, target_element.shape)
 
         ats = atomic_numbers[source_element]
         att = atomic_numbers[target_element]

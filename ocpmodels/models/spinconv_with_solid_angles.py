@@ -145,7 +145,7 @@ class spinconv(BaseModel):
         )
 
         self.dist_block = DistanceBlock(
-            self.num_basis_functions+self.num_basis_functions+3,
+            self.num_basis_functions+self.num_basis_functions+2,
             self.mid_hidden_channels,
             self.max_num_elements,
             self.distance_block_scalar_max,
@@ -219,34 +219,30 @@ class spinconv(BaseModel):
 
         else:
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
-            
+
             edge_distance = data["distances_new"]
             edge_index = data["edge_index_new"]
+            edge_distance_vec = data['edge_distance_vec']
             solid_angles = data['contact_solid_angles']
             direct_neighbors = data['direct_neighbor']
+
             mask = edge_distance < self.cutoff_radii
-            msdn = torch.masked_select(edge_distance, mask)
-            # two_d_mask = mask.reshape((1, len(mask)))
-            # two_d_mask = torch.cat((two_d_mask, two_d_mask), dim=0)
-            # msei = edge_index[two_d_mask]
-            # masked_index = torch.arange(edge_index.shape[1])
-            # masked_index = masked_index[mask]
-            # msei = edge_index[:, masked_index]
-            msei = torch.masked_select(edge_index, mask)
-            masked_solid_angles = torch.masked_select(solid_angles, mask)
-            masked_direct_neighbors = torch.masked_select(direct_neighbors, mask)
-            
-            edge_index = msei.view(2, -1)
+            masked_indices = torch.arange(len(edge_distance))[mask]
+            msdn = edge_distance[masked_indices]
+            msei = edge_index[:, masked_indices]
+            edge_distance_vec = edge_distance_vec[masked_indices, :]
+            solid_angles = solid_angles[masked_indices]
+            direct_neighbors = direct_neighbors[masked_indices]
+
+            edge_index = msei
             edge_distance = msdn
 
             sorted_indices = torch.argsort(edge_index[1])
             edge_index = edge_index[:, sorted_indices]
             edge_distance = edge_distance[sorted_indices]
-            masked_solid_angles = solid_angles[sorted_indices]
-            masked_direct_neighbors = direct_neighbors[sorted_indices]
-
-            j, i = edge_index
-            edge_distance_vec = pos[j] - pos[i]
+            edge_distance_vec = edge_distance_vec[sorted_indices, :]
+            solid_angles = solid_angles[sorted_indices]
+            direct_neighbors = direct_neighbors[sorted_indices]
             
             # edge_distance = edge_distance_vec.norm(dim=-1)
 
@@ -256,7 +252,7 @@ class spinconv(BaseModel):
         #     edge_distance_vec,
         #     self.max_num_neighbors,
         # )
-        edge_attrs = (edge_distance, masked_solid_angles, masked_direct_neighbors)
+        edge_attrs = (edge_distance, solid_angles, direct_neighbors)
         outputs = self._forward_helper(
             data, edge_index, edge_attrs, edge_distance_vec
         )
@@ -1230,7 +1226,7 @@ class DistanceBlock(torch.nn.Module):
     def forward(self, edge_attrs, source_element, target_element):
         edge_distance, edge_solid_angles, edge_direct_neighbors = edge_attrs
         edge_solid_angles = self.solid_angles_smearing(edge_solid_angles)
-        edge_direct_neighbors = torch.nn.functional.one_hot(edge_direct_neighbors, num_classes=3).float()
+        edge_direct_neighbors = torch.nn.functional.one_hot(edge_direct_neighbors, num_classes=2).float()
 
         if self.scale_distances:
             embedding_index = (
