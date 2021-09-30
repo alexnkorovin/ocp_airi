@@ -35,3 +35,4 @@ elif [ "$2" == "down" ]; then
 else
   echo 'mode not specified, exit 0.\n'
   exit 0
+fi
