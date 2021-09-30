@@ -1,9 +1,9 @@
 #!/bin/bash
 
 root_server='/share/catalyst/'
-root_obs='obs://esg-korovin/'
+obs_server='obs://esg-korovin/'
 file='data_mod1.lmdbz'
-obs='/share/obsutil/obstil'
+obs='/share/obsutil/obsutil'
 path='ocp_datasets/data/is2re/'
 
 if [ "$2" == "-h" ]; then
