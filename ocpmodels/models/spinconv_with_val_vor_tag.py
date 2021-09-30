@@ -196,7 +196,7 @@ class spinconv(BaseModel):
         self.num_atoms = len(data.batch)
         self.batch_size = len(data.natoms)
 
-        # atomic_numbers = data.atomic_numbers.long()
+        atomic_numbers = data.atomic_numbers.long()
         pos = data.pos
         if self.regress_forces:
             pos = pos.requires_grad_(True)
@@ -1197,7 +1197,7 @@ class EmbeddingBlock(torch.nn.Module):
 
     def forward(self, x, source_element, target_element, atomic_numbers, val_vor, tag):
 
-        # print(source_element, target_element, source_element.shape, target_element.shape)
+        print(source_element, target_element, source_element.shape, target_element.shape)
 
         ats = atomic_numbers[source_element]
         att = atomic_numbers[target_element]

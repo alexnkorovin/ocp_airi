@@ -116,7 +116,7 @@ except:
 
 # %%
 #model
-model = spinconv(None, None, 1, otf_graph=True,use_pbc=False, regress_forces=False)
+model = spinconv(None, None, 1, otf_graph=True,use_pbc=True, regress_forces=False)
 # model = DataParallel(model)
 
 #optimizer and loss
