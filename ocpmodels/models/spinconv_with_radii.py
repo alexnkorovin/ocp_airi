@@ -12,11 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Embedding, Linear, ModuleList, Sequential
-from torch_geometric.nn import MessagePassing, SchNet, radius_graph
-from torch_scatter import scatter
 from DataClasses_local import lmdb_dataset
-
 from ocpmodels.common.registry import registry
 from ocpmodels.common.transforms import RandomRotate
 from ocpmodels.common.utils import (
@@ -25,6 +21,9 @@ from ocpmodels.common.utils import (
     radius_graph_pbc,
 )
 from ocpmodels.models.base import BaseModel
+from torch.nn import Embedding, Linear, ModuleList, Sequential
+from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_scatter import scatter
 
 try:
     from e3nn import o3
@@ -65,11 +64,11 @@ class spinconv(BaseModel):
         readout="add",
         num_rand_rotations=5,
         scale_distances=True,
+        cutoff_radii=6,
     ):
         super(spinconv, self).__init__()
 
-        
-        self.cutoff_radii = 6
+        self.cutoff_radii = cutoff_radii
         self.num_targets = num_targets
         self.num_random_rotations = num_rand_rotations
         self.regress_forces = regress_forces
@@ -114,7 +113,7 @@ class spinconv(BaseModel):
         self.act = Swish()
 
         self.distance_expansion_forces = GaussianSmearing(
-            0.,
+            0.0,
             self.cutoff_radii,
             num_basis_functions,
             basis_width_scalar,
@@ -226,19 +225,19 @@ class spinconv(BaseModel):
 
         else:
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
-            
+
             edge_distance = data["distances_new"]
             edge_index = data["edge_index_new"]
-            edge_distance_vec = data['edge_distance_vec']
+            edge_distance_vec = data["edge_distance_vec"]
 
             mask = edge_distance < self.cutoff_radii
             masked_indices = torch.arange(len(edge_distance))[mask]
             msdn = edge_distance[masked_indices]
             msei = edge_index[:, masked_indices]
             edge_distance_vec = edge_distance_vec[masked_indices, :]
-            
+
             edge_index = msei
-            edge_distance  = msdn
+            edge_distance = msdn
 
             sorted_indices = torch.argsort(edge_index[1])
             edge_index = edge_index[:, sorted_indices]
@@ -1068,8 +1067,8 @@ class SpinConvBlock(torch.nn.Module):
             self.wigner = []
             for xrot, yrot, zrot in zip(rotx, roty, rotz):
                 _blocks = []
-                for l in range(self.lmax + 1):
-                    _blocks.append(o3.wigner_D(l, xrot, yrot, zrot))
+                for ln in range(self.lmax + 1):
+                    _blocks.append(o3.wigner_D(ln, xrot, yrot, zrot))
                 self.wigner.append(torch.block_diag(*_blocks))
 
         if self.sphere_message == "fullconv":
