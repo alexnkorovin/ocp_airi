@@ -28,7 +28,7 @@ if [ "$1" == "up" ]; then
 	echo 'copy' ${root_server}${path}${dataset}${file} to ${obs_server}${path}${dataset}
 	${obs} cp ${root_server}${path}${dataset}${file} ${obs_server}${path}${dataset}
 
-elif [ "$2" == "down" ]; then
+elif [ "$1" == "down" ]; then
 	echo 'copy' ${obs_server}${path}${dataset}${file} to ${root_server}${path}${dataset}
 	${obs} cp ${obs_server}${path}${dataset}${file} ${root_server}${path}${dataset}
 
