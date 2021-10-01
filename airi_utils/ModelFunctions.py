@@ -108,7 +108,7 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
     
     file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
     
-    path = os.path.expanduser("".join('../logs/epoch/', file_name))
+    path = os.path.expanduser("".join(['../logs/epoch/', file_name]))
     
     # model_name = os.path.basename(os.path.realpath(__file__))
 
