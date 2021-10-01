@@ -1186,7 +1186,11 @@ class EmbeddingBlock(torch.nn.Module):
     def forward(self, x, source_element, target_element):
         source_embedding = self.source_embedding(source_element)
         target_embedding = self.target_embedding(target_element)
-        embedding = torch.cat([source_embedding, target_embedding], dim=1)
+        # print(source_embedding.view(-1, 1), target_embedding.view(-1, 1))
+        # print(source_embedding.shape, target_embedding.shape)
+        
+        embedding = torch.cat([source_embedding.view(-1, 1), target_embedding.view(-1, 1)], dim=1).view(1, -1)
+        # print(embedding.shape)
         embedding = self.embed_fc1(embedding)
         embedding = self.softmax(embedding)
 
