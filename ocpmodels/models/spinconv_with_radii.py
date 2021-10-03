@@ -228,7 +228,7 @@ class spinconv(BaseModel):
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
             
             edge_distance = data["distances_new"]
-            edge_index = data["edge_index_new"]
+            edge_index = data["edge_index"]
             edge_distance_vec = data['edge_distance_vec']
 
             mask = edge_distance < self.cutoff_radii
