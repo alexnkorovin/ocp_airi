@@ -227,8 +227,13 @@ class spinconv(BaseModel):
             # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
 
             edge_distance = data["distances_new"]
+<<<<<<< HEAD
+            edge_index = data["edge_index"]
+            edge_distance_vec = data['edge_distance_vec']
+=======
             edge_index = data["edge_index_new"]
             edge_distance_vec = data["edge_distance_vec"]
+>>>>>>> e1045f181d4d9d3128d10ab86e165a16c46c7f45
 
             mask = edge_distance < self.cutoff_radii
             masked_indices = torch.arange(len(edge_distance))[mask]
