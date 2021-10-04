@@ -1,4 +1,4 @@
-No,Name,Symbol,group_l,period,block,electroneg,radius,valence,ionization,affinity,volume,group_s
+No,Name,Symbol,group_l,period,electroneg,radius,valence,ionization,affinity,block,volume,group_s
 0,,,,,,,,,,,,
 1,Hydrogen,H,1.0,1.0,2.1877708435058594,31.0,1.0,13.598434448242188,0.754194974899292,1.0,14.100000381469727,1.0
 2,Helium,He,18.0,1.0,1.0,28.0,2.0,24.587387084960938,-19.700000762939453,1.0,31.799999237060547,8.0
