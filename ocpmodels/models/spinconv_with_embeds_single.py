@@ -12,7 +12,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from DataClasses_local import lmdb_dataset
+from torch.nn import Embedding, Linear, ModuleList, Sequential
+from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_scatter import scatter
+
 from ocpmodels.common.registry import registry
 from ocpmodels.common.transforms import RandomRotate
 from ocpmodels.common.utils import (
@@ -21,9 +24,9 @@ from ocpmodels.common.utils import (
     radius_graph_pbc,
 )
 from ocpmodels.models.base import BaseModel
-from torch.nn import Embedding, Linear, ModuleList, Sequential
-from torch_geometric.nn import MessagePassing, SchNet, radius_graph
-from torch_scatter import scatter
+
+with open('/share/catalyst/ocp_airi/ocpmodels/models/cgcnn_embeds.pickle', 'br') as f:
+    continuous_embeddings = torch.load(f).float()
 
 try:
     from e3nn import o3
@@ -64,11 +67,12 @@ class spinconv(BaseModel):
         readout="add",
         num_rand_rotations=5,
         scale_distances=True,
-        cutoff_radii=6,
+        custom_embedding_value = 0
     ):
         super(spinconv, self).__init__()
 
-        self.cutoff_radii = cutoff_radii
+        self.custom_embedding_value = 0
+
         self.num_targets = num_targets
         self.num_random_rotations = num_rand_rotations
         self.regress_forces = regress_forces
@@ -114,7 +118,7 @@ class spinconv(BaseModel):
 
         self.distance_expansion_forces = GaussianSmearing(
             0.0,
-            self.cutoff_radii,
+            cutoff,
             num_basis_functions,
             basis_width_scalar,
         )
@@ -128,6 +132,7 @@ class spinconv(BaseModel):
             self.num_embedding_basis,
             self.max_num_elements,
             self.act,
+            custom_embedding_values=self.custom_embedding_value
         )
         self.distfc1 = nn.Linear(
             self.mid_hidden_channels, self.mid_hidden_channels
@@ -158,6 +163,7 @@ class spinconv(BaseModel):
                 self.sphere_message,
                 self.act,
                 self.lmax,
+                self.custom_embedding_value
             )
             self.message_blocks.append(block)
 
@@ -169,6 +175,7 @@ class spinconv(BaseModel):
             8,
             self.max_num_elements,
             self.act,
+            self.custom_embedding_value
         )
 
         if force_estimator == "random":
@@ -198,7 +205,7 @@ class spinconv(BaseModel):
 
         if self.otf_graph:
             edge_index, cell_offsets, neighbors = radius_graph_pbc(
-                data, self.cutoff, 100, data.pos.device
+                data, self.cutoff, 100, self.device
             )
             data.edge_index = edge_index
             data.cell_offsets = cell_offsets
@@ -224,39 +231,17 @@ class spinconv(BaseModel):
             edge_distance_vec = out["distance_vec"]
 
         else:
-            # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
+            edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
+            j, i = edge_index
+            edge_distance_vec = pos[j] - pos[i]
+            edge_distance = edge_distance_vec.norm(dim=-1)
 
-            edge_distance = data["distances_new"]
-<<<<<<< HEAD
-            edge_index = data["edge_index"]
-            edge_distance_vec = data['edge_distance_vec']
-=======
-            edge_index = data["edge_index_new"]
-            edge_distance_vec = data["edge_distance_vec"]
->>>>>>> e1045f181d4d9d3128d10ab86e165a16c46c7f45
-
-            mask = edge_distance < self.cutoff_radii
-            masked_indices = torch.arange(len(edge_distance))[mask]
-            msdn = edge_distance[masked_indices]
-            msei = edge_index[:, masked_indices]
-            edge_distance_vec = edge_distance_vec[masked_indices, :]
-
-            edge_index = msei
-            edge_distance = msdn
-
-            sorted_indices = torch.argsort(edge_index[1])
-            edge_index = edge_index[:, sorted_indices]
-            edge_distance = edge_distance[sorted_indices]
-            edge_distance_vec = edge_distance_vec[sorted_indices, :]
-
-            # edge_distance = edge_distance_vec.norm(dim=-1)
-
-        # edge_index, edge_distance, edge_distance_vec = self._filter_edges(
-        #     edge_index,
-        #     edge_distance,
-        #     edge_distance_vec,
-        #     self.max_num_neighbors,
-        # )
+        edge_index, edge_distance, edge_distance_vec = self._filter_edges(
+            edge_index,
+            edge_distance,
+            edge_distance_vec,
+            self.max_num_neighbors,
+        )
 
         outputs = self._forward_helper(
             data, edge_index, edge_distance, edge_distance_vec
@@ -871,7 +856,10 @@ class MessageBlock(torch.nn.Module):
         sphere_message,
         act,
         lmax,
+        custom_embedding_value
     ):
+        self.custom_embedding_value = custom_embedding_value
+
         super(MessageBlock, self).__init__()
         self.in_hidden_channels = in_hidden_channels
         self.out_hidden_channels = out_hidden_channels
@@ -903,6 +891,7 @@ class MessageBlock(torch.nn.Module):
             self.num_embedding_basis,
             self.max_num_elements,
             self.act,
+            self.custom_embedding_value
         )
         self.embeddingblock2 = EmbeddingBlock(
             self.mid_hidden_channels,
@@ -912,6 +901,7 @@ class MessageBlock(torch.nn.Module):
             self.num_embedding_basis,
             self.max_num_elements,
             self.act,
+            self.custom_embedding_value
         )
 
         self.distfc1 = nn.Linear(
@@ -1072,8 +1062,8 @@ class SpinConvBlock(torch.nn.Module):
             self.wigner = []
             for xrot, yrot, zrot in zip(rotx, roty, rotz):
                 _blocks = []
-                for ln in range(self.lmax + 1):
-                    _blocks.append(o3.wigner_D(ln, xrot, yrot, zrot))
+                for l_degree in range(self.lmax + 1):
+                    _blocks.append(o3.wigner_D(l_degree, xrot, yrot, zrot))
                 self.wigner.append(torch.block_diag(*_blocks))
 
         if self.sphere_message == "fullconv":
@@ -1132,6 +1122,26 @@ class SpinConvBlock(torch.nn.Module):
         return x
 
 
+class CustomEmbedding(torch.nn.Module):
+    def __init__(self,
+                 emb_size, embedding_index=0
+    ):
+        super(CustomEmbedding, self).__init__()
+        self.emb_size = emb_size
+        self.continuous_embeddings = continuous_embeddings
+        self.len_emb = self.continuous_embeddings.shape[1]
+        self.EmbeddingLayer = nn.Linear(self.len_emb, self.emb_size)
+        self.weight = self.EmbeddingLayer.weight
+        self.embedding_index = 0
+
+    def forward(self, atomic_numbers):
+        device = atomic_numbers.device
+        
+        embedding = continuous_embeddings[atomic_numbers][self.embedding_index].to(device)
+
+        return self.EmbeddingLayer(embedding)
+
+
 class EmbeddingBlock(torch.nn.Module):
     def __init__(
         self,
@@ -1142,6 +1152,7 @@ class EmbeddingBlock(torch.nn.Module):
         num_embedding_basis,
         max_num_elements,
         act,
+        custom_embedding_values=0
     ):
         super(EmbeddingBlock, self).__init__()
         self.in_hidden_channels = in_hidden_channels
@@ -1161,12 +1172,8 @@ class EmbeddingBlock(torch.nn.Module):
             self.mid_hidden_channels, self.out_hidden_channels
         )
 
-        self.source_embedding = nn.Embedding(
-            max_num_elements, self.embedding_size
-        )
-        self.target_embedding = nn.Embedding(
-            max_num_elements, self.embedding_size
-        )
+        self.source_embedding = CustomEmbedding(self.embedding_size, custom_embedding_values)
+        self.target_embedding = CustomEmbedding(self.embedding_size, custom_embedding_values)
         nn.init.uniform_(self.source_embedding.weight.data, -0.0001, 0.0001)
         nn.init.uniform_(self.target_embedding.weight.data, -0.0001, 0.0001)
 
@@ -1179,7 +1186,11 @@ class EmbeddingBlock(torch.nn.Module):
     def forward(self, x, source_element, target_element):
         source_embedding = self.source_embedding(source_element)
         target_embedding = self.target_embedding(target_element)
-        embedding = torch.cat([source_embedding, target_embedding], dim=1)
+        # print(source_embedding.view(-1, 1), target_embedding.view(-1, 1))
+        # print(source_embedding.shape, target_embedding.shape)
+        
+        embedding = torch.cat([source_embedding.view(-1, 1), target_embedding.view(-1, 1)], dim=1).view(1, -1)
+        # print(embedding.shape)
         embedding = self.embed_fc1(embedding)
         embedding = self.softmax(embedding)
 
@@ -1244,7 +1255,7 @@ class DistanceBlock(torch.nn.Module):
         else:
             x = self.distance_expansion(edge_distance)
 
-        x = self.fc1(x.float())
+        x = self.fc1(x)
 
         return x
 
