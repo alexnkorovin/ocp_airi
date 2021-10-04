@@ -25,12 +25,12 @@ else
 fi
 
 if [ "$1" == "up" ]; then
-	echo 'copy' ${root_server}${path}${dataset}${file} to ${obs_server}${path}${dataset}
-	${obs} cp ${root_server}${path}${dataset}${file} ${obs_server}${path}${dataset}
+	echo 'copy' ${root_server}${path}$2$3 to ${obs_server}${path}$2
+	${obs} cp ${root_server}${path}$2$$3 ${obs_server}${path}$2
 
 elif [ "$1" == "down" ]; then
-	echo 'copy' ${obs_server}${path}${dataset}${file} to ${root_server}${path}${dataset}
-	${obs} cp ${obs_server}${path}${dataset}${file} ${root_server}${path}${dataset}
+	echo 'copy' ${obs_server}${path}$2$3 to ${root_server}${path}$2
+	${obs} cp ${obs_server}${path}$2$3 ${root_server}${path}$2
 
 else
   echo 'mode not specified, exit 0.\n'
