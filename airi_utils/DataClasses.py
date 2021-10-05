@@ -41,13 +41,13 @@ class lmdb_dataset(Dataset):
     """
 
     def __init__(
-        self, config, transform=None, compressed=False, multiproc=False
+        self, config, transform=None, compressed=False, multiproc=False, byte=False
     ):
         super().__init__()
 
         self.config = config
         self.multiproc = multiproc
-
+        self.byte = byte
         self.db_path = self.config
 
         assert os.path.isfile(self.db_path), "{} not found".format(
@@ -62,9 +62,15 @@ class lmdb_dataset(Dataset):
 
         self.env = self.connect_db(self.db_path)
 
-        self._keys = [
-            f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
-        ]
+        # # key by number of elements - faster bu only for keys in range(0, num)
+        # self._keys = [
+        #     f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
+        # ]
+        
+        # keys by key names
+        with self.env.begin() as txn:
+            with txn.cursor() as curs:
+                self._keys = [key for key, value in curs]
 
         #        self._keys = [f"{j}".encode("ascii") for j in txn.cursor().iternext(key=True, value=False)]
         self.transform = transform
@@ -89,21 +95,29 @@ class lmdb_dataset(Dataset):
 
     def __getitem__(self, idx):
         # Return features.
-        datapoint_pickled = self.env.begin().get(self._keys[idx])
+        if type(idx) is int:
+            datapoint_pickled = self.env.begin().get(self._keys[idx])
+        elif type(idx) is str:
+            datapoint_pickled = self.env.begin().get(idx.encode('ascii'))
+
         gc.disable()
-        if self.multiproc is False:
-            data_object = (
-                pickle.loads(zlib.decompress(datapoint_pickled))
-                if self.compressed is True
-                else pickle.loads(datapoint_pickled)
-            )
+        
+        if self.byte == True:
+            data_object = datapoint_pickled
         else:
-            data_object = (
-                pickle.loads(zlib.decompress(datapoint_pickled))
-                if self.compressed is True
-                else pickle.loads(datapoint_pickled)
-            )
-        # a = Parallel(n_jobs=2)(delayed(restore_edge_angles)(el['edge_angles']) for el in dataset_target)
+            if self.multiproc is False:
+                data_object = (
+                    pickle.loads(zlib.decompress(datapoint_pickled))
+                    if self.compressed is True
+                    else pickle.loads(datapoint_pickled)
+                )
+            else:
+                data_object = (
+                    pickle.loads(zlib.decompress(datapoint_pickled))
+                    if self.compressed is True
+                    else pickle.loads(datapoint_pickled)
+                )
+                # data_object = Parallel(n_jobs=2)(delayed(restore_edge_angles)(el['edge_angles']) for el in dataset_target)
 
         data_object = (
             data_object
