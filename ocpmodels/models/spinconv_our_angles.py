@@ -235,7 +235,7 @@ class spinconv(BaseModel):
             edge_batch_pointer = batch_pointer[edge_index[0]]
             _, edges_per_system = torch.unique_consecutive(edge_batch_pointer, return_counts=True)
             edges_per_system = torch.cumsum(edges_per_system, dim=-1) - edges_per_system
-            local_edge_index = torch.arange(edge_index.shape[1]) - edges_per_system[edge_batch_pointer]
+            local_edge_index = torch.arange(edge_index.shape[1]).to(self.device) - edges_per_system[edge_batch_pointer]
             # permutation = []
             # for i in range(0, len(local_edge_index-1), 2):
             #     permutation.append(i+1)
@@ -788,7 +788,7 @@ class spinconv(BaseModel):
         phi = 3
         theta = 1
         index = index.float()
-        index = index.numpy()
+        index = index.item()
         mask = np.abs(df[:, 0] - index) < 0.001
         size = df.shape[0]
         masked_id = np.arange(size)[mask]
@@ -811,7 +811,7 @@ class spinconv(BaseModel):
         for k in X_and_Y:
             source_edge_X.append(k[0])
             source_edge_Y.append(k[1])
-        source_edge_X, source_edge_Y = torch.tensor(source_edge_X), torch.tensor(source_edge_Y)
+        source_edge_X, source_edge_Y = torch.tensor(source_edge_X).to(self.device), torch.tensor(source_edge_Y).to(self.device)
 
         source_edge_X = (source_edge_X) / (2.0 * math.pi)
         source_edge_Y = (source_edge_Y) / (

@@ -71,7 +71,7 @@ class spinconv(BaseModel):
     ):
         super(spinconv, self).__init__()
 
-        self.custom_embedding_value = 0
+        self.custom_embedding_value = custom_embedding_value
 
         self.num_targets = num_targets
         self.num_random_rotations = num_rand_rotations
@@ -132,10 +132,10 @@ class spinconv(BaseModel):
             self.num_embedding_basis,
             self.max_num_elements,
             self.act,
-            custom_embedding_values=self.custom_embedding_value
+            custom_embedding_value=self.custom_embedding_value
         )
         self.distfc1 = nn.Linear(
-            self.mid_hidden_channels, self.mid_hidden_channels
+            self.mid_hidden_channels,self.mid_hidden_channels
         )
         self.distfc2 = nn.Linear(
             self.mid_hidden_channels, self.mid_hidden_channels
@@ -151,6 +151,7 @@ class spinconv(BaseModel):
         )
 
         self.message_blocks = ModuleList()
+        print("message", self.custom_embedding_value)
         for _ in range(num_interactions):
             block = MessageBlock(
                 hidden_channels,
@@ -1121,24 +1122,47 @@ class SpinConvBlock(torch.nn.Module):
 
         return x
 
-
+    embed_discr = {"group_onehot" : list(range(18)),
+                   "period_onehot": list(range(19, 27)),
+                   "block_onehot" : list(range(28, 32)),
+                   "electronegativity" : 33,
+                   "radius" : 34,
+                   "valence" : 35,
+                   "ionization" : 36,
+                   "affinity" : 37,
+                   "volume": 38
+                  }
+    
+    
 class CustomEmbedding(torch.nn.Module):
     def __init__(self,
-                 emb_size, embedding_index=0
+                 emb_size, embedding_index
     ):
         super(CustomEmbedding, self).__init__()
         self.emb_size = emb_size
         self.continuous_embeddings = continuous_embeddings
-        self.len_emb = self.continuous_embeddings.shape[1]
+        self.max_atoms = 100
+        print(embedding_index)
+        self.len_emb = len(embedding_index)+self.max_atoms
         self.EmbeddingLayer = nn.Linear(self.len_emb, self.emb_size)
         self.weight = self.EmbeddingLayer.weight
-        self.embedding_index = 0
+        self.embedding_index = embedding_index
 
     def forward(self, atomic_numbers):
         device = atomic_numbers.device
+        self.atom_embedding = F.one_hot(atomic_numbers, self.max_atoms)
         
-        embedding = continuous_embeddings[atomic_numbers][self.embedding_index].to(device)
-
+        
+        embedding = continuous_embeddings[atomic_numbers, :][:,self.embedding_index].to(device)
+        # embedding = continuous_embeddings[atomic_numbers][self.embedding_index].to(device)
+        # print(
+        # continuous_embeddings[atomic_numbers, :].shape,
+        # continuous_embeddings[atomic_numbers, :][:,self.embedding_index].shape,
+        # self.atom_embedding.shape    
+        # )
+        embedding = torch.cat([embedding, self.atom_embedding], dim=1)
+        # print(embedding.shape)
+        # print(self.len_emb, self.emb_size, atomic_numbers.shape)
         return self.EmbeddingLayer(embedding)
 
 
@@ -1152,8 +1176,9 @@ class EmbeddingBlock(torch.nn.Module):
         num_embedding_basis,
         max_num_elements,
         act,
-        custom_embedding_values=0
+        custom_embedding_value=torch.tensor([0])
     ):
+        self.custom_embedding_value = custom_embedding_value
         super(EmbeddingBlock, self).__init__()
         self.in_hidden_channels = in_hidden_channels
         self.out_hidden_channels = out_hidden_channels
@@ -1172,11 +1197,12 @@ class EmbeddingBlock(torch.nn.Module):
             self.mid_hidden_channels, self.out_hidden_channels
         )
 
-        self.source_embedding = CustomEmbedding(self.embedding_size, custom_embedding_values)
-        self.target_embedding = CustomEmbedding(self.embedding_size, custom_embedding_values)
+        self.source_embedding = CustomEmbedding(self.embedding_size, self.custom_embedding_value)
+        self.target_embedding = CustomEmbedding(self.embedding_size, self.custom_embedding_value)
         nn.init.uniform_(self.source_embedding.weight.data, -0.0001, 0.0001)
         nn.init.uniform_(self.target_embedding.weight.data, -0.0001, 0.0001)
 
+        
         self.embed_fc1 = nn.Linear(
             2 * self.embedding_size, self.num_embedding_basis
         )
@@ -1189,8 +1215,8 @@ class EmbeddingBlock(torch.nn.Module):
         # print(source_embedding.view(-1, 1), target_embedding.view(-1, 1))
         # print(source_embedding.shape, target_embedding.shape)
         
-        embedding = torch.cat([source_embedding.view(-1, 1), target_embedding.view(-1, 1)], dim=1).view(1, -1)
-        # print(embedding.shape)
+        embedding = torch.cat([source_embedding.view(-1, 1), target_embedding.view(-1, 1)], dim=1).view(-1, 2*self.embedding_size)
+        # print(source_embedding.view(-1, 1).shape, target_embedding.view(-1, 1).shape, embedding.shape)
         embedding = self.embed_fc1(embedding)
         embedding = self.softmax(embedding)
 
