@@ -63,20 +63,26 @@ class lmdb_dataset(Dataset):
         self.env = self.connect_db(self.db_path)
 
         # # key by number of elements - faster bu only for keys in range(0, num)
-        # self._keys = [
+        # self.keys = [
         #     f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
         # ]
         
         # keys by key names
         with self.env.begin() as txn:
             with txn.cursor() as curs:
-                self._keys = [key for key, value in curs]
+                self.keys = [key for key, value in curs]
 
-        #        self._keys = [f"{j}".encode("ascii") for j in txn.cursor().iternext(key=True, value=False)]
+        #        self.keys = [f"{j}".encode("ascii") for j in txn.cursor().iternext(key=True, value=False)]
         self.transform = transform
 
     def __len__(self):
-        return len(self._keys)
+        return len(self.keys)
+    
+    def new(self):
+        return lmdb_dataset(self.config, self.transform, self.compressed, self.multiproc, self.byte)
+    
+    def iloc(self, start, stop):
+        self.keys = self.keys[start:stop]
 
     def __getstate__(self):
         # this method is called when you are
@@ -96,7 +102,7 @@ class lmdb_dataset(Dataset):
     def __getitem__(self, idx):
         # Return features.
         if type(idx) is int:
-            datapoint_pickled = self.env.begin().get(self._keys[idx])
+            datapoint_pickled = self.env.begin().get(self.keys[idx])
         elif type(idx) is str:
             datapoint_pickled = self.env.begin().get(idx.encode('ascii'))
 
@@ -218,7 +224,7 @@ class Dataset(pyg_Dataset):
         preprocessing=None,
     ):
 
-        self.data = lmdb_dataset(data)
+        self.data = data
         self.length = len(self.data)
         # self.target = data[target_field]
         self.type_ = type_
