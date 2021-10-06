@@ -251,7 +251,7 @@ class spinconv(BaseModel):
             
             # edge_distance = edge_distance_vec.norm(dim=-1)
 
-        value_voronoi = self.volume_G_smear(data["voronoi_volumes"])
+        # value_voronoi = self.volume_G_smear(data["voronoi_volumes"])
         tag = F.one_hot(data["tags"], 3)
 
         # edge_index, edge_distance, edge_distance_vec = self._filter_edges(
@@ -264,7 +264,7 @@ class spinconv(BaseModel):
         
 
         outputs = self._forward_helper(
-            data, edge_index, edge_distance, edge_distance_vec, value_voronoi, tag
+            data, edge_index, edge_distance, edge_distance_vec, tag
         )
         if self.show_timing_info is True:
             torch.cuda.synchronize()
@@ -281,7 +281,7 @@ class spinconv(BaseModel):
 
     # restructure forward helper for conditional grad
     def _forward_helper(
-        self, data, edge_index, edge_distance, edge_distance_vec, value_voronoi, tag
+        self, data, edge_index, edge_distance, edge_distance_vec, tag
     ):
         ###############################################################
         # Initialize messages
@@ -300,7 +300,7 @@ class spinconv(BaseModel):
         x = self.act(x)
         x = self.distfc2(x)
         x = self.act(x)
-        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers, value_voronoi, tag)
+        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers, tag)
 
         ###############################################################
         # Update messages using block interactions
@@ -325,7 +325,7 @@ class spinconv(BaseModel):
                 target_element,
                 proj_edges_index,
                 proj_edges_delta,
-                proj_edges_src_index,  atomic_numbers,  value_voronoi, tag
+                proj_edges_src_index,  atomic_numbers, tag
             )
 
             if block_index > 0:
@@ -344,7 +344,7 @@ class spinconv(BaseModel):
         )
         at_arange = torch.arange(len(atomic_numbers))
         energy = self.energyembeddingblock(
-            energy, at_arange, at_arange, atomic_numbers, value_voronoi, tag,
+            energy, at_arange, at_arange, atomic_numbers, tag,
         )
         energy = scatter(energy, data.batch, dim=0)
 
@@ -1179,11 +1179,14 @@ class EmbeddingBlock(torch.nn.Module):
         #     max_num_elements, self.embedding_size
         # )
 
+        print("max num elements", max_num_elements)
         self.source_embedding = nn.Linear(max_num_elements, self.embedding_size)
 
         # self.target_embedding = nn.Embedding(
         #     max_num_elements, self.embedding_size
         # )
+        
+        
         self.target_embedding = nn.Linear(max_num_elements, self.embedding_size)
 
         nn.init.uniform_(self.source_embedding.weight.data, -0.0001, 0.0001)
@@ -1195,22 +1198,25 @@ class EmbeddingBlock(torch.nn.Module):
 
         self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, x, source_element, target_element, atomic_numbers, val_vor, tag):
+    def forward(self, x, source_element, target_element, atomic_numbers, tag):
 
-        print(source_element, target_element, source_element.shape, target_element.shape)
+        # print(source_element, target_element, source_element.shape, target_element.shape)
 
         ats = atomic_numbers[source_element]
         att = atomic_numbers[target_element]
 
-        val_vor_source = val_vor[source_element]
-        val_vor_target = val_vor[target_element]
+        # val_vor_source = val_vor[source_element]
+        # val_vor_target = val_vor[target_element]
 
         tag_source = tag[source_element]
         tag_target = tag[target_element]
 
-        tar_concat = torch.cat([tag_target, val_vor_target, att.view(-1, 1)], dim=1)
-        sor_concat = torch.cat([tag_source, val_vor_source, ats.view(-1, 1)], dim=1)
+        
+        tar_concat = torch.cat([tag_target, att.view(-1, 1)], dim=1)
+        sor_concat = torch.cat([tag_source, ats.view(-1, 1)], dim=1)
 
+        print(tar_concat.shape, sor_concat.shape)
+        
         source_embedding = self.source_embedding(sor_concat.float())
         target_embedding = self.target_embedding(tar_concat.float())
 
@@ -1357,6 +1363,9 @@ class GaussianSmearing(torch.nn.Module):
     def forward(self, dist):
         #print('sh1', dist.view(-1, 1).shape)
         #print('sh2', self.offset.view(1, -1).shape)
+        # self.to(dist.device)
+        # print(self.device, dist.device)
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
+                                                   
         #print('dist sh', dist.shape)
         return torch.exp(self.coeff * torch.pow(dist, 2))

@@ -151,7 +151,7 @@ class spinconv(BaseModel):
         )
 
         self.message_blocks = ModuleList()
-        print("message", self.custom_embedding_value)
+        # print("message", self.custom_embedding_value)
         for _ in range(num_interactions):
             block = MessageBlock(
                 hidden_channels,
@@ -1142,7 +1142,7 @@ class CustomEmbedding(torch.nn.Module):
         self.emb_size = emb_size
         self.continuous_embeddings = continuous_embeddings
         self.max_atoms = 100
-        print(embedding_index)
+        # print(embedding_index)
         self.len_emb = len(embedding_index)+self.max_atoms
         self.EmbeddingLayer = nn.Linear(self.len_emb, self.emb_size)
         self.weight = self.EmbeddingLayer.weight
@@ -1346,4 +1346,6 @@ class GaussianSmearing(torch.nn.Module):
 
     def forward(self, dist):
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
+        # print(dist.device, self.coeff.device)
+        # self.coeff.to(dist.device)
         return torch.exp(self.coeff * torch.pow(dist, 2))
