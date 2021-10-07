@@ -1122,16 +1122,16 @@ class SpinConvBlock(torch.nn.Module):
 
         return x
 
-    embed_discr = {"group_onehot" : list(range(18)),
-                   "period_onehot": list(range(19, 27)),
-                   "block_onehot" : list(range(28, 32)),
-                   "electronegativity" : 33,
-                   "radius" : 34,
-                   "valence" : 35,
-                   "ionization" : 36,
-                   "affinity" : 37,
-                   "volume": 38
-                  }
+embed_discr = {"group_onehot" : list(range(18)),
+               "period_onehot": list(range(19, 27)),
+               "block_onehot" : list(range(28, 32)),
+               "electronegativity" : 33,
+               "radius" : 34,
+               "valence" : 35,
+               "ionization" : 36,
+               "affinity" : 37,
+               "volume": 38
+              }
     
     
 class CustomEmbedding(torch.nn.Module):
@@ -1154,12 +1154,7 @@ class CustomEmbedding(torch.nn.Module):
         
         
         embedding = continuous_embeddings[atomic_numbers, :][:,self.embedding_index].to(device)
-        # embedding = continuous_embeddings[atomic_numbers][self.embedding_index].to(device)
-        # print(
-        # continuous_embeddings[atomic_numbers, :].shape,
-        # continuous_embeddings[atomic_numbers, :][:,self.embedding_index].shape,
-        # self.atom_embedding.shape    
-        # )
+
         embedding = torch.cat([embedding, self.atom_embedding], dim=1)
         # print(embedding.shape)
         # print(self.len_emb, self.emb_size, atomic_numbers.shape)
