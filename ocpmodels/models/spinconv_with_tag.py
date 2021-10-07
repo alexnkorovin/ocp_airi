@@ -4,6 +4,13 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
+
+"""
+Надо не забыть перевести в onehot
+
+
+"""
 import math
 import time
 from math import pi as PI
@@ -54,7 +61,7 @@ class spinconv(BaseModel):
         sphere_size_long=9,
         cutoff=10.0,
         distance_block_scalar_max=2.0,
-        max_num_elements=54,
+        max_num_elements=103,
         embedding_size=32,
         show_timing_info=False,
         sphere_message="fullconv",  # message block sphere representation
@@ -251,15 +258,14 @@ class spinconv(BaseModel):
             
             # edge_distance = edge_distance_vec.norm(dim=-1)
 
-        # value_voronoi = self.volume_G_smear(data["voronoi_volumes"])
         tag = F.one_hot(data["tags"], 3)
 
-        # edge_index, edge_distance, edge_distance_vec = self._filter_edges(
-        #     edge_index,
-        #     edge_distance,
-        #     edge_distance_vec,
-        #     self.max_num_neighbors,
-        # )
+        edge_index, edge_distance, edge_distance_vec = self._filter_edges(
+            edge_index,
+            edge_distance,
+            edge_distance_vec,
+            self.max_num_neighbors,
+        )
 
         
 
@@ -287,8 +293,8 @@ class spinconv(BaseModel):
         # Initialize messages
         ###############################################################
 
-        atomic_numbers = data["atomic_numbers"] 
-
+        atomic_numbers = data["atomic_numbers"].long()
+        
         source_element = edge_index[0, :]
         target_element = edge_index[1, :]
 
@@ -941,8 +947,7 @@ class MessageBlock(torch.nn.Module):
         proj_index,
         proj_delta,
         proj_src_index,
-        atomic_numbers,
-        val_vor, tag
+        atomic_numbers, tag
     ):
         out_size = len(x)
 
@@ -950,8 +955,7 @@ class MessageBlock(torch.nn.Module):
             x, out_size, proj_index, proj_delta, proj_src_index
         )
 
-        x = self.embeddingblock1(x, source_element, target_element, atomic_numbers,
-         val_vor, tag)
+        x = self.embeddingblock1(x, source_element, target_element, atomic_numbers, tag)
 
         x_dist = self.distfc1(x_dist)
         x_dist = self.act(x_dist)
@@ -959,8 +963,7 @@ class MessageBlock(torch.nn.Module):
         x = x + x_dist
 
         x = self.act(x)
-        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers,
-         val_vor, tag)
+        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers, tag)
 
         return x
 
@@ -1201,21 +1204,21 @@ class EmbeddingBlock(torch.nn.Module):
     def forward(self, x, source_element, target_element, atomic_numbers, tag):
 
         # print(source_element, target_element, source_element.shape, target_element.shape)
-
+        atomic_numbers = F.one_hot(atomic_numbers, 100)
+        
         ats = atomic_numbers[source_element]
         att = atomic_numbers[target_element]
 
-        # val_vor_source = val_vor[source_element]
-        # val_vor_target = val_vor[target_element]
-
         tag_source = tag[source_element]
         tag_target = tag[target_element]
-
         
-        tar_concat = torch.cat([tag_target, att.view(-1, 1)], dim=1)
-        sor_concat = torch.cat([tag_source, ats.view(-1, 1)], dim=1)
+        # print(tag_target.shape, att.shape)
+        # print(tag_source.shape, ats.shape)
+        
+        tar_concat = torch.cat([tag_target, att], dim=1)
+        sor_concat = torch.cat([tag_source, ats], dim=1)
 
-        print(tar_concat.shape, sor_concat.shape)
+        # print(tar_concat.shape, sor_concat.shape)
         
         source_embedding = self.source_embedding(sor_concat.float())
         target_embedding = self.target_embedding(tar_concat.float())

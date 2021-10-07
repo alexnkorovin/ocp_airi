@@ -15,7 +15,6 @@ import torch.nn.functional as F
 from torch.nn import Embedding, Linear, ModuleList, Sequential
 from torch_geometric.nn import MessagePassing, SchNet, radius_graph
 from torch_scatter import scatter
-from DataClasses_local import lmdb_dataset
 
 from ocpmodels.common.registry import registry
 from ocpmodels.common.transforms import RandomRotate
@@ -54,7 +53,7 @@ class spinconv(BaseModel):
         sphere_size_long=9,
         cutoff=10.0,
         distance_block_scalar_max=2.0,
-        max_num_elements=54,
+        max_num_elements=90,
         embedding_size=32,
         show_timing_info=False,
         sphere_message="fullconv",  # message block sphere representation
@@ -64,12 +63,10 @@ class spinconv(BaseModel):
         model_ref_number=0,
         readout="add",
         num_rand_rotations=5,
-        scale_distances=False,
+        scale_distances=True,
     ):
         super(spinconv, self).__init__()
 
-        
-        self.cutoff_radii = 6
         self.num_targets = num_targets
         self.num_random_rotations = num_rand_rotations
         self.regress_forces = regress_forces
@@ -114,14 +111,10 @@ class spinconv(BaseModel):
         self.act = Swish()
 
         self.distance_expansion_forces = GaussianSmearing(
-            0.,
-            self.cutoff_radii,
+            0.0,
+            cutoff,
             num_basis_functions,
             basis_width_scalar,
-        )
-
-        self.volume_G_smear = GaussianSmearing(
-            10., 3000., 50, mode="logspace"
         )
 
         # Weights for message initialization
@@ -229,42 +222,20 @@ class spinconv(BaseModel):
             edge_distance_vec = out["distance_vec"]
 
         else:
-            # edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
+            edge_index = radius_graph(pos, r=self.cutoff, batch=data.batch)
+            j, i = edge_index
+            edge_distance_vec = pos[j] - pos[i]
+            edge_distance = edge_distance_vec.norm(dim=-1)
 
-            edge_distance = data["distances_new"]
-            edge_index = data["edge_index_new"]
-            edge_distance_vec = data['edge_distance_vec']
-
-            mask = edge_distance < self.cutoff_radii
-            masked_indices = torch.arange(len(edge_distance))[mask]
-            msdn = edge_distance[masked_indices]
-            msei = edge_index[:, masked_indices]
-            edge_distance_vec = edge_distance_vec[masked_indices, :]
-
-            edge_index = msei
-            edge_distance = msdn
-
-            sorted_indices = torch.argsort(edge_index[1])
-            edge_index = edge_index[:, sorted_indices]
-            edge_distance = edge_distance[sorted_indices]
-            edge_distance_vec = edge_distance_vec[sorted_indices, :]
-            
-            # edge_distance = edge_distance_vec.norm(dim=-1)
-
-        # value_voronoi = self.volume_G_smear(data["voronoi_volumes"])
-        tag = F.one_hot(data["tags"], 3)
-
-        # edge_index, edge_distance, edge_distance_vec = self._filter_edges(
-        #     edge_index,
-        #     edge_distance,
-        #     edge_distance_vec,
-        #     self.max_num_neighbors,
-        # )
-
-        
+        edge_index, edge_distance, edge_distance_vec = self._filter_edges(
+            edge_index,
+            edge_distance,
+            edge_distance_vec,
+            self.max_num_neighbors,
+        )
 
         outputs = self._forward_helper(
-            data, edge_index, edge_distance, edge_distance_vec, tag
+            data, edge_index, edge_distance, edge_distance_vec
         )
         if self.show_timing_info is True:
             torch.cuda.synchronize()
@@ -281,17 +252,14 @@ class spinconv(BaseModel):
 
     # restructure forward helper for conditional grad
     def _forward_helper(
-        self, data, edge_index, edge_distance, edge_distance_vec, tag
+        self, data, edge_index, edge_distance, edge_distance_vec
     ):
         ###############################################################
         # Initialize messages
         ###############################################################
 
-        atomic_numbers = data["atomic_numbers"] 
-
-        source_element = edge_index[0, :]
-        target_element = edge_index[1, :]
-
+        source_element = data.atomic_numbers[edge_index[0, :]].long()
+        target_element = data.atomic_numbers[edge_index[1, :]].long()
 
         x_dist = self.dist_block(edge_distance, source_element, target_element)
 
@@ -300,7 +268,7 @@ class spinconv(BaseModel):
         x = self.act(x)
         x = self.distfc2(x)
         x = self.act(x)
-        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers, tag)
+        x = self.embeddingblock2(x, source_element, target_element)
 
         ###############################################################
         # Update messages using block interactions
@@ -325,7 +293,7 @@ class spinconv(BaseModel):
                 target_element,
                 proj_edges_index,
                 proj_edges_delta,
-                proj_edges_src_index,  atomic_numbers, tag
+                proj_edges_src_index,
             )
 
             if block_index > 0:
@@ -342,9 +310,9 @@ class spinconv(BaseModel):
         energy = scatter(x, edge_index[1], dim=0, dim_size=data.num_nodes) / (
             self.max_num_neighbors / 2.0 + 1.0
         )
-        at_arange = torch.arange(len(atomic_numbers))
+        atomic_numbers = data.atomic_numbers.long()
         energy = self.energyembeddingblock(
-            energy, at_arange, at_arange, atomic_numbers, tag,
+            energy, atomic_numbers, atomic_numbers
         )
         energy = scatter(energy, data.batch, dim=0)
 
@@ -708,7 +676,6 @@ class spinconv(BaseModel):
         torch.set_printoptions(sci_mode=False)
         length = len(edge_distance_vec)
         device = edge_distance_vec.device
-
         # Assuming the edges are consecutive based on the target index
         target_node_index, neigh_count = torch.unique_consecutive(
             edge_index[1], return_counts=True
@@ -738,14 +705,13 @@ class spinconv(BaseModel):
 
         # target_lookup - For each target node, a list of edge indices
         # target_neigh_count - number of neighbors for each target node
-        source_edge = target_lookup[edge_index[0]]
+        source_edge = torch.cat((target_lookup[edge_index[0]], target_lookup[edge_index[1]]), dim=1)
         target_edge = (
             torch.arange(length, device=device)
             .long()
             .view(-1, 1)
-            .repeat(1, max_neighbors)
+            .repeat(1, 2*max_neighbors)
         )
-
         source_edge = source_edge.view(-1)
         target_edge = target_edge.view(-1)
 
@@ -893,9 +859,6 @@ class MessageBlock(torch.nn.Module):
         self.max_num_elements = max_num_elements
         self.num_embedding_basis = 8
 
-        self.volume_G_smear = GaussianSmearing(
-            10., 3000., 50, mode="logspace"
-        )
         self.spinconvblock = SpinConvBlock(
             self.in_hidden_channels,
             self.mid_hidden_channels,
@@ -941,8 +904,6 @@ class MessageBlock(torch.nn.Module):
         proj_index,
         proj_delta,
         proj_src_index,
-        atomic_numbers,
-        val_vor, tag
     ):
         out_size = len(x)
 
@@ -950,8 +911,7 @@ class MessageBlock(torch.nn.Module):
             x, out_size, proj_index, proj_delta, proj_src_index
         )
 
-        x = self.embeddingblock1(x, source_element, target_element, atomic_numbers,
-         val_vor, tag)
+        x = self.embeddingblock1(x, source_element, target_element)
 
         x_dist = self.distfc1(x_dist)
         x_dist = self.act(x_dist)
@@ -959,8 +919,7 @@ class MessageBlock(torch.nn.Module):
         x = x + x_dist
 
         x = self.act(x)
-        x = self.embeddingblock2(x, source_element, target_element, atomic_numbers,
-         val_vor, tag)
+        x = self.embeddingblock2(x, source_element, target_element)
 
         return x
 
@@ -1146,6 +1105,7 @@ class SpinConvBlock(torch.nn.Module):
 
         return x
 
+
 class EmbeddingBlock(torch.nn.Module):
     def __init__(
         self,
@@ -1175,20 +1135,12 @@ class EmbeddingBlock(torch.nn.Module):
             self.mid_hidden_channels, self.out_hidden_channels
         )
 
-        # self.source_embedding = nn.Embedding(
-        #     max_num_elements, self.embedding_size
-        # )
-
-        print("max num elements", max_num_elements)
-        self.source_embedding = nn.Linear(max_num_elements, self.embedding_size)
-
-        # self.target_embedding = nn.Embedding(
-        #     max_num_elements, self.embedding_size
-        # )
-        
-        
-        self.target_embedding = nn.Linear(max_num_elements, self.embedding_size)
-
+        self.source_embedding = nn.Embedding(
+            max_num_elements, self.embedding_size
+        )
+        self.target_embedding = nn.Embedding(
+            max_num_elements, self.embedding_size
+        )
         nn.init.uniform_(self.source_embedding.weight.data, -0.0001, 0.0001)
         nn.init.uniform_(self.target_embedding.weight.data, -0.0001, 0.0001)
 
@@ -1198,29 +1150,9 @@ class EmbeddingBlock(torch.nn.Module):
 
         self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, x, source_element, target_element, atomic_numbers, tag):
-
-        # print(source_element, target_element, source_element.shape, target_element.shape)
-
-        ats = atomic_numbers[source_element]
-        att = atomic_numbers[target_element]
-
-        # val_vor_source = val_vor[source_element]
-        # val_vor_target = val_vor[target_element]
-
-        tag_source = tag[source_element]
-        tag_target = tag[target_element]
-
-        
-        tar_concat = torch.cat([tag_target, att.view(-1, 1)], dim=1)
-        sor_concat = torch.cat([tag_source, ats.view(-1, 1)], dim=1)
-
-        print(tar_concat.shape, sor_concat.shape)
-        
-        source_embedding = self.source_embedding(sor_concat.float())
-        target_embedding = self.target_embedding(tar_concat.float())
-
-
+    def forward(self, x, source_element, target_element):
+        source_embedding = self.source_embedding(source_element)
+        target_embedding = self.target_embedding(target_element)
         embedding = torch.cat([source_embedding, target_embedding], dim=1)
         embedding = self.embed_fc1(embedding)
         embedding = self.softmax(embedding)
@@ -1286,7 +1218,7 @@ class DistanceBlock(torch.nn.Module):
         else:
             x = self.distance_expansion(edge_distance)
 
-        x = self.fc1(x.float())
+        x = self.fc1(x)
 
         return x
 
@@ -1307,7 +1239,6 @@ class ProjectLatLongSphere(torch.nn.Module):
             device=device,
         )
         splat_values = x[source_edge_index]
-
         # Perform bilinear splatting
         x_proj.index_add_(0, index[0], splat_values * (delta[0].view(-1, 1)))
         x_proj.index_add_(0, index[1], splat_values * (delta[1].view(-1, 1)))
@@ -1340,32 +1271,15 @@ class Swish(torch.nn.Module):
 
 class GaussianSmearing(torch.nn.Module):
     def __init__(
-        self, start=-5.0, stop=5.0, num_gaussians=50, basis_width_scalar=1.0, mode='lin'
+        self, start=-5.0, stop=5.0, num_gaussians=50, basis_width_scalar=1.0
     ):
         super(GaussianSmearing, self).__init__()
-        if mode=='lin' :
-            
-            offset = torch.linspace(start, stop, num_gaussians)
-            self.coeff = (
-                -0.5 / (basis_width_scalar * (offset[1] - offset[0])).item() ** 2
-            )
-        else:
-            offset = torch.logspace(np.log10(start), np.log10(stop), num_gaussians, base=10)
-            offset_deltas = offset[1:] - offset[:-1]
-            #print('OOOOO',offset_deltas[:1])
-            offset_deltas = torch.cat((offset_deltas[:1], offset_deltas))
-            self.coeff = (
-                -0.5 / (basis_width_scalar * offset_deltas ) ** 2
-            )
-        #print('coeff', self.coeff)
+        offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = (
+            -0.5 / (basis_width_scalar * (offset[1] - offset[0])).item() ** 2
+        )
         self.register_buffer("offset", offset)
 
     def forward(self, dist):
-        #print('sh1', dist.view(-1, 1).shape)
-        #print('sh2', self.offset.view(1, -1).shape)
-        # self.to(dist.device)
-        # print(self.device, dist.device)
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
-                                                   
-        #print('dist sh', dist.shape)
         return torch.exp(self.coeff * torch.pow(dist, 2))
