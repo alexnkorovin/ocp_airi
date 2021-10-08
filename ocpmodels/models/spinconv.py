@@ -676,7 +676,6 @@ class spinconv(BaseModel):
         torch.set_printoptions(sci_mode=False)
         length = len(edge_distance_vec)
         device = edge_distance_vec.device
-
         # Assuming the edges are consecutive based on the target index
         target_node_index, neigh_count = torch.unique_consecutive(
             edge_index[1], return_counts=True
@@ -707,13 +706,13 @@ class spinconv(BaseModel):
         # target_lookup - For each target node, a list of edge indices
         # target_neigh_count - number of neighbors for each target node
         source_edge = target_lookup[edge_index[0]]
+        #source_edge -- для каждого индекса связи из edge indices список смежных edge_indices, надо заменить его на список углов
         target_edge = (
             torch.arange(length, device=device)
             .long()
             .view(-1, 1)
             .repeat(1, max_neighbors)
         )
-
         source_edge = source_edge.view(-1)
         target_edge = target_edge.view(-1)
 
@@ -1241,7 +1240,6 @@ class ProjectLatLongSphere(torch.nn.Module):
             device=device,
         )
         splat_values = x[source_edge_index]
-
         # Perform bilinear splatting
         x_proj.index_add_(0, index[0], splat_values * (delta[0].view(-1, 1)))
         x_proj.index_add_(0, index[1], splat_values * (delta[1].view(-1, 1)))
