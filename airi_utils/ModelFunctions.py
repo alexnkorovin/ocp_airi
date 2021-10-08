@@ -26,114 +26,209 @@ def send_hist(model, writer, step):
     for name, weight in model.named_parameters():
         writer.add_histogram(name, weight, step)
 
+num_gpu = torch.cuda.device_count()
 
-def train(
-    model,
-    iterator,
-    optimizer,
-    criterion,
-    print_every=10,
-    epoch=0,
-    writer=None,
-    device="cpu",
-):
+if num_gpu > 1:
 
-    print(f"epoch {epoch}")
+    def train(
+        model,
+        iterator,
+        optimizer,
+        criterion,
+        print_every=10,
+        epoch=0,
+        writer=None,
+        device="cpu",
+    ):
 
-    epoch_loss = 0
+        print(f"epoch {epoch}")
 
-    model.train()
+        epoch_loss = 0
 
-    for i, data_list in enumerate(iterator):
+        model.train()
 
-        ys = torch.cat([data.y for data in data_list]).to(device)
-        optimizer.zero_grad()
-        predictions = model(data_list).squeeze()
-        predictions = predictions.reshape((predictions.shape[0], 1))
+        for i, data_list in enumerate(iterator):
 
-        loss = criterion(predictions.float(), ys.float())
-        loss.backward()
+            ys = torch.cat([data.y for data in data_list]).to(device)
+            optimizer.zero_grad()
+            predictions = model(data_list).squeeze()
+            predictions = predictions.reshape((predictions.shape[0], 1))
 
-        optimizer.step()
+            loss = criterion(predictions.float(), ys.float())
+            loss.backward()
 
-        batch_loss = loss.item()
-        epoch_loss += batch_loss
+            optimizer.step()
+
+            batch_loss = loss.item()
+            epoch_loss += batch_loss
+
+            if writer is not None:
+
+                lr = optimizer.param_groups[0]["lr"]
+
+                step = i + epoch * len(iterator)
+
+                send_scalars(
+                    lr, batch_loss, writer, step=step, epoch=epoch, type_="train"
+                )
+
+            if not (i + 1) % print_every:
+                send_hist(model, writer, i)
+                print(f"step {i} from {len(iterator)} at epoch {epoch}")
+                print(f"Loss: {batch_loss}")
+
+        return epoch_loss / len(iterator)
+
+
+    def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
+
+        print(f"epoch {epoch} evaluation")
+
+        epoch_loss = 0
+
+        #    model.train(False)
+        model.eval()
+
+        with torch.no_grad():
+
+            for data_list in iterator:
+
+                ys = torch.cat([data.y for data in data_list]).to(device)
+                predictions = model(data_list).squeeze()
+                predictions = predictions.reshape((predictions.shape[0], 1))
+
+                loss = criterion(predictions.float(), ys.to(device).float())
+
+                epoch_loss += loss.item()
+
+        overall_loss = epoch_loss / len(iterator)
 
         if writer is not None:
-
-            lr = optimizer.param_groups[0]["lr"]
-
-            step = i + epoch * len(iterator)
-
             send_scalars(
-                lr, batch_loss, writer, step=step, epoch=epoch, type_="train"
+                None, overall_loss, writer, step=None, epoch=epoch, type_="val"
+            )
+        timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+
+        file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
+
+        path = os.path.expanduser("".join(['../logs/epoch/', file_name]))
+
+        # model_name = os.path.basename(os.path.realpath(__file__))
+
+        torch.save(model, path)
+        print(f"epoch loss {overall_loss}")
+        print(
+            "========================================================================================================"
+        )
+
+        return overall_loss
+
+
+    def inference(model, iterator):
+        y = torch.tensor([])
+
+        #    model.train(False)
+        model.eval()
+
+        with torch.no_grad():
+            for data_list in iterator:
+                predictions = model(data_list).squeeze()
+                predictions = predictions.reshape((predictions.shape[0], 1))
+                y = torch.cat((y, predictions))
+
+        return y
+else:
+    def train(
+            model,
+            iterator,
+            optimizer,
+            criterion,
+            print_every=10,
+            epoch=0,
+            writer=None,
+            device="cpu",
+    ):
+
+        print(f"epoch {epoch}")
+
+        epoch_loss = 0
+
+        model.train()
+
+        for i, (systems, ys) in enumerate(iterator):
+
+            optimizer.zero_grad()
+            predictions = model(systems.to(device)).squeeze()
+
+            loss = criterion(predictions.float(), ys.to(device).float())
+            loss.backward()
+
+            optimizer.step()
+
+            batch_loss = loss.item()
+            epoch_loss += batch_loss
+
+            if writer is not None:
+                lr = optimizer.param_groups[0]["lr"]
+
+                step = i + epoch * len(iterator)
+
+                send_hist(model, writer, i)
+                send_scalars(
+                    lr, batch_loss, writer, step=step, epoch=epoch, type_="train"
+                )
+
+            if not (i + 1) % print_every:
+                print(f"step {i} from {len(iterator)} at epoch {epoch}")
+                print(f"Loss: {batch_loss}")
+
+        return epoch_loss / len(iterator)
+
+
+    def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
+
+        print(f"epoch {epoch} evaluation")
+
+        epoch_loss = 0
+
+        #    model.train(False)
+        model.eval()
+
+        with torch.no_grad():
+            for systems, ys in iterator:
+                predictions = model(systems.to(device)).squeeze()
+                loss = criterion(predictions.float(), ys.to(device).float())
+
+                epoch_loss += loss.item()
+
+        overall_loss = epoch_loss / len(iterator)
+
+        if writer is not None:
+            send_scalars(
+                None, overall_loss, writer, step=None, epoch=epoch, type_="val"
             )
 
-        if not (i + 1) % print_every:
-            send_hist(model, writer, i)
-            print(f"step {i} from {len(iterator)} at epoch {epoch}")
-            print(f"Loss: {batch_loss}")
-
-    return epoch_loss / len(iterator)
-
-
-def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
-
-    print(f"epoch {epoch} evaluation")
-
-    epoch_loss = 0
-
-    #    model.train(False)
-    model.eval()
-
-    with torch.no_grad():
-        
-        for data_list in iterator:
-            
-            ys = torch.cat([data.y for data in data_list]).to(device)
-            predictions = model(data_list).squeeze()
-            predictions = predictions.reshape((predictions.shape[0], 1))  
-                
-            loss = criterion(predictions.float(), ys.to(device).float())
-
-            epoch_loss += loss.item()
-
-    overall_loss = epoch_loss / len(iterator)
-
-    if writer is not None:
-        send_scalars(
-            None, overall_loss, writer, step=None, epoch=epoch, type_="val"
+        print(f"epoch loss {overall_loss}")
+        print(
+            "========================================================================================================"
         )
-    timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    
-    file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
-    
-    path = os.path.expanduser("".join(['../logs/epoch/', file_name]))
-    
-    # model_name = os.path.basename(os.path.realpath(__file__))
 
-    torch.save(model, path)
-    print(f"epoch loss {overall_loss}")
-    print(
-        "========================================================================================================"
-    )
-
-    return overall_loss
+        return overall_loss
 
 
-def inference(model, iterator):
-    y = torch.tensor([])
+    def inference(model, iterator):
+        y = torch.tensor([])
 
-    #    model.train(False)
-    model.eval()
+        #    model.train(False)
+        model.eval()
 
-    with torch.no_grad():
-        for data_list in iterator:
-            predictions = model(data_list).squeeze()
-            predictions = predictions.reshape((predictions.shape[0], 1))  
-            y = torch.cat((y, predictions))
+        with torch.no_grad():
+            for systems, ys in iterator:
+                predictions = model(systems.to(device)).squeeze()
+                y = torch.cat((y, predictions))
 
-    return y
+        return y
+
 
 
 def my_reshape(tensor):
