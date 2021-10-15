@@ -4,27 +4,26 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-import _pickle as pickle
 import gc
 import os
 import pickle as pkl
 import zlib
 from typing import List, Union
 
+import _pickle as pickle
 import lmdb
 import torch
 from joblib import Parallel, delayed
 from torch.utils.data import Dataset
 from torch_geometric.data import Data
-from torch_geometric.data import Dataset as pyg_Dataset
 from torch_geometric.data import DataLoader as pyg_DataLoader
+from torch_geometric.data import Dataset as pyg_Dataset
 
 ### код прямиком из PyG чтобы не обновлять библиотеку
 #############################################################################
 
-from typing import Union, List
+# from typing import Union, List
 
-import torch
 
 def collate_fn(data_list):
     return data_list
@@ -51,13 +50,21 @@ class DataListLoader(torch.utils.data.DataLoader):
             :class:`torch.utils.data.DataLoader`, such as :obj:`drop_last` or
             :obj:`num_workers`.
     """
-    def __init__(self, dataset,
-                 batch_size: int = 1, shuffle: bool = False, **kwargs):
-        if 'collate_fn' in kwargs:
-            del kwargs['collate_fn']
 
-        super().__init__(dataset, batch_size=batch_size, shuffle=shuffle,
-                         collate_fn=collate_fn, **kwargs)
+    def __init__(
+        self, dataset, batch_size: int = 1, shuffle: bool = False, **kwargs
+    ):
+        if "collate_fn" in kwargs:
+            del kwargs["collate_fn"]
+
+        super().__init__(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=collate_fn,
+            **kwargs,
+        )
+
 
 ### код прямиком из PyG чтобы не обновлять библиотеку закончился
 #############################################################################
@@ -88,7 +95,13 @@ class lmdb_dataset(Dataset):
     """
 
     def __init__(
-        self, config, transform=None, compressed=False, multiproc=False, byte=False
+        self,
+        config,
+        transform=None,
+        compressed=False,
+        multiproc=False,
+        byte=False,
+        keyinit=False,
     ):
         super().__init__()
 
@@ -109,24 +122,35 @@ class lmdb_dataset(Dataset):
 
         self.env = self.connect_db(self.db_path)
 
-        # # key by number of elements - faster bu only for keys in range(0, num)
-        # self.keys = [
-        #     f"{j}".encode("ascii") for j in range(self.env.stat()["entries"])
-        # ]
+        if not keyinit:
+            # key by number of elements - faster bu only for keys in range(0, num)
+            self.keys = [
+                f"{j}".encode("ascii")
+                for j in range(self.env.stat()["entries"])
+            ]
 
-        # keys by key names
-        with self.env.begin() as txn:
-            with txn.cursor() as curs:
-                self.keys = [key for key, value in curs]
+        elif keyinit:
+            # keys by key names
+            with self.env.begin() as txn:
+                with txn.cursor() as curs:
+                    self.keys = [
+                        f"{j}".encode("ascii")
+                        for j in curs.iternext(keys=True, values=False)
+                    ]
 
-        #        self.keys = [f"{j}".encode("ascii") for j in txn.cursor().iternext(key=True, value=False)]
         self.transform = transform
 
     def __len__(self):
         return len(self.keys)
 
     def new(self):
-        return lmdb_dataset(self.config, self.transform, self.compressed, self.multiproc, self.byte)
+        return lmdb_dataset(
+            self.config,
+            self.transform,
+            self.compressed,
+            self.multiproc,
+            self.byte,
+        )
 
     def iloc(self, start, stop):
         self.keys = self.keys[start:stop]
@@ -151,11 +175,11 @@ class lmdb_dataset(Dataset):
         if type(idx) is int:
             datapoint_pickled = self.env.begin().get(self.keys[idx])
         elif type(idx) is str:
-            datapoint_pickled = self.env.begin().get(idx.encode('ascii'))
+            datapoint_pickled = self.env.begin().get(idx.encode("ascii"))
 
         gc.disable()
 
-        if self.byte == True:
+        if self.byte:
             data_object = datapoint_pickled
         else:
             if self.multiproc is False:
@@ -299,4 +323,3 @@ def choose_dataloader(*args, **kwargs):
 
     else:
         return pyg_DataLoader(*args, **kwargs)
-        
