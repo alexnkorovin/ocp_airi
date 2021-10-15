@@ -48,7 +48,7 @@ def predict(model, batch, multigpu_mode, device, inference=False):
         else: 
             # batch is a tuple of pyg batch oblect (i.e. one not connected graph contains batch_size graphs as connected components) and ys
             systems = batch
-            ys = systems.y.squeeze()
+            ys = systems.y.squeeze().to(device)
             predictions = model(systems.to(device)).squeeze()
         
         return predictions, ys
@@ -60,10 +60,10 @@ def predict(model, batch, multigpu_mode, device, inference=False):
             predictions = predictions.reshape((predictions.shape[0], 1))
 
         else:
-            sids = batch['sid']
+            sids = batch['sid'].to(device)
             predictions = model(batch.to(device)).squeeze()
         
-        return predictions, sid
+        return predictions, sids
 
 
 def train(
@@ -162,15 +162,19 @@ def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu", sa
     return overall_loss
 
 
-def inference(model, iterator):
-    y = torch.tensor([])
+def inference(model, iterator, device='cpu'):
+    y = torch.tensor([]).to(device)
 
+    multigpu_mode = multigpu_available()
+    
     model.eval()
 
     with torch.no_grad():
         for batch in iterator:
-            predictions, sid = predict(model, multigpu_mode, device, inference=True)
-            mini_submit = torch.cat((sids, predictions.to('cpu')), dim=1)
+            predictions, sids = predict(model, batch, multigpu_mode, device, inference=True)
+            sids = my_reshape(sids)
+            predictions = my_reshape(predictions)
+            mini_submit = torch.cat((sids, predictions), dim=1)
             y = torch.cat((y, mini_submit))
 
     return y
