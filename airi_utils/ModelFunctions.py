@@ -1,17 +1,21 @@
 import os
+
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import torch
+
 import torch.nn.functional as F
 import torch.optim as optim
-from DataClasses import Dataset, lmdb_dataset
+
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.data import Data, DataLoader
 from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter
+
+from DataClasses import Dataset, lmdb_dataset
 
 
 def send_scalars(lr, loss, writer, step=-1, epoch=-1, type_="train"):
@@ -26,11 +30,43 @@ def send_hist(model, writer, step):
     for name, weight in model.named_parameters():
         writer.add_histogram(name, weight, step)
 
-num_gpu = torch.cuda.device_count()
+# set device
+def set_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if num_gpu > 1:
+def multigpu_available():
+    num_gpu = torch.cuda.device_count()
+    return num_gpu > 1
 
-    def train(
+def predict(model, batch, multigpu_mode, device, inference=False):
+    if not inference:
+        if multigpu_mode:
+            # batch is a list of pyg.data odjects 
+            ys = torch.cat([data.y for data in batch]).squeeze().to(device)
+            predictions = model(batch).squeeze()
+            # predictions = predictions.reshape((predictions.shape[0], 1))
+        else: 
+            # batch is a tuple of pyg batch oblect (i.e. one not connected graph contains batch_size graphs as connected components) and ys
+            systems = batch
+            ys = systems.y.squeeze()
+            predictions = model(systems.to(device)).squeeze()
+        
+        return predictions, ys
+
+    else:
+        if multigpu_mode:
+            sids = torch.tensor([[data['sid']] for data in data_list])
+            predictions = model(batch).squeeze()
+            predictions = predictions.reshape((predictions.shape[0], 1))
+
+        else:
+            sids = batch['sid']
+            predictions = model(batch.to(device)).squeeze()
+        
+        return predictions, sid
+
+
+def train(
         model,
         iterator,
         optimizer,
@@ -45,14 +81,15 @@ if num_gpu > 1:
 
         epoch_loss = 0
 
+        multigpu_mode = multigpu_available()
+
         model.train()
 
-        for i, data_list in enumerate(iterator):
+        for i, batch in enumerate(iterator):
 
-            ys = torch.cat([data.y for data in data_list]).to(device)
             optimizer.zero_grad()
-            predictions = model(data_list).squeeze()
-            predictions = predictions.reshape((predictions.shape[0], 1))
+
+            predictions, ys = predict(model, batch, multigpu_mode, device)
 
             loss = criterion(predictions.float(), ys.float())
             loss.backward()
@@ -80,155 +117,63 @@ if num_gpu > 1:
         return epoch_loss / len(iterator)
 
 
-    def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
 
-        print(f"epoch {epoch} evaluation")
+def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu", save_checkpoints=False, timestamp=None):
 
-        epoch_loss = 0
+    print(f"epoch {epoch} evaluation")
 
-        #    model.train(False)
-        model.eval()
+    epoch_loss = 0
 
-        with torch.no_grad():
+    multigpu_mode = multigpu_available()
 
-            for data_list in iterator:
+    #    model.train(False)
+    model.eval()
 
-                ys = torch.cat([data.y for data in data_list]).to(device)
-                predictions = model(data_list).squeeze()
-                predictions = predictions.reshape((predictions.shape[0], 1))
+    with torch.no_grad():
 
-                loss = criterion(predictions.float(), ys.to(device).float())
+        for batch in iterator:
 
-                epoch_loss += loss.item()
-
-        overall_loss = epoch_loss / len(iterator)
-
-        if writer is not None:
-            send_scalars(
-                None, overall_loss, writer, step=None, epoch=epoch, type_="val"
-            )
-        timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-
-        file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
-
-        path = os.path.expanduser("".join(['../logs/epoch/', file_name]))
-
-        # model_name = os.path.basename(os.path.realpath(__file__))
-
-        torch.save(model, path)
-        print(f"epoch loss {overall_loss}")
-        print(
-            "========================================================================================================"
-        )
-
-        return overall_loss
-
-
-    def inference(model, iterator):
-        y = torch.tensor([])
-
-        #    model.train(False)
-        model.eval()
-
-        with torch.no_grad():
-            for data_list in iterator:
-                predictions = model(data_list).squeeze()
-                predictions = predictions.reshape((predictions.shape[0], 1))
-                y = torch.cat((y, predictions))
-
-        return y
-else:
-    def train(
-            model,
-            iterator,
-            optimizer,
-            criterion,
-            print_every=10,
-            epoch=0,
-            writer=None,
-            device="cpu",
-    ):
-
-        print(f"epoch {epoch}")
-
-        epoch_loss = 0
-
-        model.train()
-
-        for i, (systems, ys) in enumerate(iterator):
-
-            optimizer.zero_grad()
-            predictions = model(systems.to(device)).squeeze()
+            predictions, ys = predict(model, batch, multigpu_mode, device)
 
             loss = criterion(predictions.float(), ys.to(device).float())
-            loss.backward()
 
-            optimizer.step()
+            epoch_loss += loss.item()
 
-            batch_loss = loss.item()
-            epoch_loss += batch_loss
+    overall_loss = epoch_loss / len(iterator)
 
-            if writer is not None:
-                lr = optimizer.param_groups[0]["lr"]
-
-                step = i + epoch * len(iterator)
-
-                send_hist(model, writer, i)
-                send_scalars(
-                    lr, batch_loss, writer, step=step, epoch=epoch, type_="train"
-                )
-
-            if not (i + 1) % print_every:
-                print(f"step {i} from {len(iterator)} at epoch {epoch}")
-                print(f"Loss: {batch_loss}")
-
-        return epoch_loss / len(iterator)
-
-
-    def evaluate(model, iterator, criterion, epoch=0, writer=False, device="cpu"):
-
-        print(f"epoch {epoch} evaluation")
-
-        epoch_loss = 0
-
-        #    model.train(False)
-        model.eval()
-
-        with torch.no_grad():
-            for systems, ys in iterator:
-                predictions = model(systems.to(device)).squeeze()
-                loss = criterion(predictions.float(), ys.to(device).float())
-
-                epoch_loss += loss.item()
-
-        overall_loss = epoch_loss / len(iterator)
-
-        if writer is not None:
-            send_scalars(
-                None, overall_loss, writer, step=None, epoch=epoch, type_="val"
-            )
-
-        print(f"epoch loss {overall_loss}")
-        print(
-            "========================================================================================================"
+    if writer is not None:
+        send_scalars(
+            None, overall_loss, writer, step=None, epoch=epoch, type_="val"
         )
+    if timestamp == None:
+        timestamp = str(datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
 
-        return overall_loss
+    if save_checkpoints:
+        file_name = 'epoch ' + str(epoch) + ' ' + timestamp + '.pickle'
+        path = os.path.expanduser("".join(['../logs/epoch/', file_name]))
+        model_name = os.path.basename(os.path.realpath(__file__))
+        torch.save(model, path)
+
+    print(f"epoch loss {overall_loss}")
+    print(
+        "========================================================================================================"
+    )
+
+    return overall_loss
 
 
-    def inference(model, iterator):
-        y = torch.tensor([])
+def inference(model, iterator):
+    y = torch.tensor([])
 
-        #    model.train(False)
-        model.eval()
+    model.eval()
 
-        with torch.no_grad():
-            for systems, ys in iterator:
-                predictions = model(systems.to(device)).squeeze()
-                y = torch.cat((y, predictions))
+    with torch.no_grad():
+        for batch in iterator:
+            predictions, sid = predict(model, multigpu_mode, device, inference=True)
+            mini_submit = torch.cat((sids, predictions.to('cpu')), dim=1)
+            y = torch.cat((y, mini_submit))
 
-        return y
-
+    return y
 
 
 def my_reshape(tensor):
@@ -269,7 +214,7 @@ def restore_edge_angles(list_of_arrays):
 # делаем из данных матрицу векторов-атомов, список рёбер (edge_index) и матрицу векторов-рёбер; надо писать свою функцию для каждой сети
 def preprocessing(system, opt="angles"):
 
-    device = device_set()
+    device = set_device()
     tags = system["tags"].long()
     tags = F.one_hot(tags, num_classes=3)
 
@@ -303,7 +248,3 @@ def preprocessing(system, opt="angles"):
         edge_attr=edges_embeds.to(device),
     )
 
-
-# set device
-def device_set():
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
