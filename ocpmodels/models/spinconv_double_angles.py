@@ -1283,3 +1283,21 @@ class GaussianSmearing(torch.nn.Module):
     def forward(self, dist):
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+def convert_angles(array):
+    array[:, 1] = np.pi - array[:, 1]
+    array[:, 3] = - array[:, 3]
+    return array
+
+def restore_edge_angles(list_of_arrays):
+    el_new = []
+    for el in list_of_arrays:
+        el_new.append(el)
+        el_new.append(convert_angles(el.copy()))        
+    return el_new
+
+def preprocessing(system):
+    #system['edge_angles'] = restore_edge_angles(system['edge_angles'])
+    system['edge_distance_vec'] = system['pos'][system['edge_index_new'][0]] - system['pos'][system['edge_index_new'][1]] + torch.matmul(system['cell_offsets_new'].float(), system['cell'][0])
+    #return Data(**system)
+    return system

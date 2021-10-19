@@ -1349,3 +1349,10 @@ class GaussianSmearing(torch.nn.Module):
         # print(dist.device, self.coeff.device)
         # self.coeff.to(dist.device)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+def preprocessing(system):
+    keys = ['pos', 'atomic_numbers', 'cell', 'natoms', 'sid']
+    features_dict = {}
+    for key in keys:
+        features_dict[key] = system[key]
+    return Data(**features_dict)

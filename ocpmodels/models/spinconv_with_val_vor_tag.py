@@ -1369,3 +1369,6 @@ class GaussianSmearing(torch.nn.Module):
                                                    
         #print('dist sh', dist.shape)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+def preprocessing(system):
+    return system
