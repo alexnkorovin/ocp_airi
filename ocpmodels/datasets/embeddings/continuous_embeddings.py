@@ -2,15 +2,15 @@
 CGCNN-like embeddings using continuous values instead of original k-hot.
 
 Properties:
-    Group number
-    Period number
-    Electronegativity
-    Covalent radius
-    Valence electrons
-    First ionization energy
-    Electron affinity
-    Block
-    Atomic Volume
+    1.Group number #one-hot
+    2.Period number #one-hot
+    3.Electronegativity #norm
+    4.Covalent radius #norm
+    5.Valence electrons #norm
+    6.First ionization energy #norm
+    7.Electron affinity #norm
+    8.Block #one hot
+    9.Atomic Volume #norm
 
 NaN stored for unavaialable parameters.
 """
