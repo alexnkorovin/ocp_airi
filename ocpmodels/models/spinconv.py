@@ -707,7 +707,7 @@ class spinconv(BaseModel):
         # target_lookup - For each target node, a list of edge indices
         # target_neigh_count - number of neighbors for each target node
         source_edge = target_lookup[edge_index[0]]
-        #source_edge -- для каждого индекса связи из edge indices список смежных edge_indices, надо заменить его на список углов
+        # source_edge -- для каждого индекса связи из edge indices список смежных edge_indices, надо заменить его на список углов
         target_edge = (
             torch.arange(length, device=device)
             .long()
@@ -1048,8 +1048,8 @@ class SpinConvBlock(torch.nn.Module):
             self.wigner = []
             for xrot, yrot, zrot in zip(rotx, roty, rotz):
                 _blocks = []
-                for l in range(self.lmax + 1):
-                    _blocks.append(o3.wigner_D(l, xrot, yrot, zrot))
+                for line in range(self.lmax + 1):
+                    _blocks.append(o3.wigner_D(line, xrot, yrot, zrot))
                 self.wigner.append(torch.block_diag(*_blocks))
 
         if self.sphere_message == "fullconv":
@@ -1288,7 +1288,7 @@ class GaussianSmearing(torch.nn.Module):
 
 
 def preprocessing(system):
-    keys = ['pos', 'atomic_numbers', 'cell', 'natoms', 'sid']
+    keys = ["pos", "atomic_numbers", "cell", "natoms", "sid"]
     features_dict = {}
     for key in keys:
         features_dict[key] = system[key]
