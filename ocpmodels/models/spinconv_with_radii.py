@@ -12,7 +12,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from DataClasses_local import lmdb_dataset
 from ocpmodels.common.registry import registry
 from ocpmodels.common.transforms import RandomRotate
 from ocpmodels.common.utils import (
@@ -23,6 +22,7 @@ from ocpmodels.common.utils import (
 from ocpmodels.models.base import BaseModel
 from torch.nn import Embedding, Linear, ModuleList, Sequential
 from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_geometric.data import Data
 from torch_scatter import scatter
 
 try:
@@ -1307,3 +1307,8 @@ class GaussianSmearing(torch.nn.Module):
     def forward(self, dist):
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+
+def preprocessing(system):
+    system['edge_index'] = system['edge_index_new']
+    return system

@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Embedding, Linear, ModuleList, Sequential
 from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_geometric.data import Data
 from torch_scatter import scatter
 
 from ocpmodels.common.registry import registry
@@ -1303,3 +1304,11 @@ class GaussianSmearing(torch.nn.Module):
     def forward(self, dist):
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+def preprocessing(system):
+    keys = ['pos', 'atomic_numbers', 'cell', 'natoms', 'sid']
+    features_dict = {}
+    for key in keys:
+        features_dict[key] = system[key]
+    return Data(**features_dict)
+

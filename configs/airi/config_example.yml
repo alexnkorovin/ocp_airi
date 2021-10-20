@@ -1,0 +1,19 @@
+model_name: spinconv
+
+batch_size: 8
+num_workers: 0
+lr: 0.001
+epochs: 15
+
+train_dataset: ../../ocp_datasets/data/is2re/10k/train/data.lmdb
+val_dataset: ../../ocp_datasets/data/is2re/10k/train/data.lmdb
+
+model_args:
+  - None
+  - None
+  - 1
+model_kwargs:
+  otf_graph: False
+  regress_forces: False
+  use_pbc: False
+#  cutoff_radii: 10
