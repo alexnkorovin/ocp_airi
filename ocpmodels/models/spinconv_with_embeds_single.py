@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Embedding, Linear, ModuleList, Sequential
 from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_geometric.data import Data
 from torch_scatter import scatter
 
 from ocpmodels.common.registry import registry

@@ -22,6 +22,7 @@ from ocpmodels.common.utils import (
 from ocpmodels.models.base import BaseModel
 from torch.nn import Embedding, Linear, ModuleList, Sequential
 from torch_geometric.nn import MessagePassing, SchNet, radius_graph
+from torch_geometric.data import Data
 from torch_scatter import scatter
 
 try:
