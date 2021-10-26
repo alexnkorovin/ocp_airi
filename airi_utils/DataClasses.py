@@ -11,6 +11,7 @@ import zlib
 from typing import List, Union
 
 import _pickle as pickle
+
 import lmdb
 import torch
 from joblib import Parallel, delayed
@@ -81,6 +82,221 @@ def pickle_load_z(datapoint_pickled):
 
 def pickle_load(datapoint_pickled):
     return pickle.loads(datapoint_pickled)
+
+
+class lmdb_dataset_list(Dataset):
+    r"""Dataset class to load from LMDB files containing
+    single point computations.
+    Useful for Initial Structure to Relaxed Energy (IS2RE) task.
+
+    Args:
+        config (dict): Dataset configuration
+        transform (callable, optional): Data transform function.
+            (default: :obj:`None`)
+    """
+
+    def __init__(
+        self,
+        config,
+        transform=None,
+        compressed=False,
+        multiproc=False,
+        byte=False,
+        keyinit=False,
+    ):
+        super().__init__()
+
+        self.config = config
+        self.multiproc = multiproc
+        self.byte = byte
+        self.db_path = (
+            self.config if type(self.config) == list else list(self.config)
+        )
+
+        for i in self.db_path:
+            assert os.path.isfile(i), "{} not found".format(i)
+
+        suffix = self.db_path[0].split(".")[-1]
+        self.compressed = True if suffix == "lmdbz" else False
+
+        self.compressed = compressed
+        self.keys = []
+
+        for k, i in enumerate(self.db_path):
+            self.__setattr__("env" + str(k), self.connect_db(i))
+
+            if not keyinit:
+                # key by number of elements - faster bu only for keys in range(0, num)
+                self.keys = self.keys + [
+                    (k, f"{j}".encode("ascii"))
+                    for j in range(
+                        self.__getattribute__("env" + str(k)).stat()["entries"]
+                    )
+                ]
+
+            elif keyinit:
+                # keys by key names
+                with self.__getattribute__("env" + str(k)).begin() as txn:
+                    with txn.cursor() as curs:
+                        self.keys = self.keys + [
+                            (k, f"{j}".encode("ascii"))
+                            for j in curs.iternext(keys=True, values=False)
+                        ]
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.keys)
+
+    def new(self):
+        return lmdb_dataset(
+            self.config,
+            self.transform,
+            self.compressed,
+            self.multiproc,
+            self.byte,
+        )
+
+    def iloc(self, start, stop):
+        self.keys = self.keys[start:stop]
+
+    def __getstate__(self):
+        # this method is called when you are
+        # going to pickle the class, to know what to pickle
+        state = self.__dict__.copy()
+
+        # don't pickle the parameter env
+        for k, i in enumerate(self.db_path):
+            del state["env" + str(k)]
+
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # retrieve the excluded env
+        for k, i in enumerate(self.db_path):
+            self.__setattr__("env" + str(k), self.connect_db(i))
+
+    def __getitem__(self, idx):
+        # Return features.
+
+        if type(idx) is int:
+            idx = idx
+        elif type(idx) is str:
+            idx = [y[1] for y in self.keys].index(idx.encode("ascii"))
+
+        datapoint_pickled = (
+            self.__getattribute__("env" + str(self.keys[idx][0]))
+            .begin()
+            .get(self.keys[idx][1])
+        )
+
+        gc.disable()
+
+        if self.byte:
+            data_object = datapoint_pickled
+        else:
+            if self.multiproc is False:
+                data_object = (
+                    pickle.loads(zlib.decompress(datapoint_pickled))
+                    if self.compressed is True
+                    else pickle.loads(datapoint_pickled)
+                )
+            else:
+                data_object = (
+                    pickle.loads(zlib.decompress(datapoint_pickled))
+                    if self.compressed is True
+                    else pickle.loads(datapoint_pickled)
+                )
+                # data_object = Parallel(n_jobs=2)(delayed(restore_edge_angles)(el['edge_angles']) for el in dataset_target)
+
+        data_object = (
+            data_object
+            if self.transform is None
+            else self.transform(data_object)
+        )
+        gc.enable()
+        # print(self.env.info())
+        return data_object
+
+    def connect_db(self, lmdb_path=None):
+
+        env = lmdb.open(
+            lmdb_path,
+            subdir=False,
+            readonly=True,
+            lock=False,
+            readahead=True,
+            meminit=False,
+            max_readers=1000,
+        )
+        # print(env.info())
+        return env
+
+    def close_db(self):
+        self.env.close()
+
+    def describe(self, idx=0):
+        self.idx = idx
+        print(f'total entries: {self.env.stat()["entries"]}')
+
+        dataset = self.__getitem__(idx)
+        print(f"info for item: {self.idx}")
+
+        try:
+            keys = dataset.keys()
+
+        except TypeError:
+            keys = dataset.keys
+
+        for key in keys:
+            # print(type(dataset[key]))
+            obj = dataset[key]
+            dot = 25
+
+            if "torch.Tensor" in str(type(obj)):
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{str(list(obj.shape)):>10}'
+                )
+            elif type(obj) is float:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{obj:>10.4f}'
+                )
+
+            elif type(obj) is int:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{obj:>10}'
+                )
+
+            elif type(obj) is list:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
+
+            elif type(obj) is list:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
+
+            elif type(obj) is str:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{len(obj):>10}'
+                )
+
+            else:
+                print(
+                    f'{key}:{"." * (dot - len(key))}{str(type(obj)):>20}{"." * 5}{type(obj):>10}'
+                )
+
+    def info(self):
+        print(self.env.info())
+
+    def set_map_size(self, map_size):
+        self.env.set_mapsize(map_size)
+        print(f'map_size: {self.env.info()["map_size"]}')
+
+    def stat(self):
+        print(self.env.stat())
 
 
 class lmdb_dataset(Dataset):
